@@ -4,8 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Claude Code GitHub Tracker</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <meta name="description" content="Daily tracking of Claude Code adoption across public GitHub commits. Interactive chart with adoption rate trends.">
+
+    <!-- Open Graph for LinkedIn / social sharing -->
+    <meta property="og:title" content="Claude Code GitHub Tracker">
+    <meta property="og:description" content="Daily tracking of Claude Code adoption across public GitHub commits.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://albgri.github.io/claude-github-monitor/">
+
+    <!-- Performance: preconnect to CDN -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+    <link rel="preconnect" href="https://raw.githubusercontent.com" crossorigin>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js" defer></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -13,6 +26,20 @@
             background: #f8f9fa;
             color: #1a1a1a;
             line-height: 1.6;
+        }
+        .skip-link {
+            position: absolute;
+            top: -100%;
+            left: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: #1a1a1a;
+            color: #fff;
+            border-radius: 0 0 6px 6px;
+            z-index: 100;
+            text-decoration: none;
+        }
+        .skip-link:focus {
+            top: 0;
         }
         .container {
             max-width: 960px;
@@ -80,34 +107,42 @@
             .stat-card { padding: 0.75rem 1rem; }
             h1 { font-size: 1.3rem; }
         }
+        @media (prefers-reduced-motion: reduce) {
+            * { transition: none !important; }
+        }
     </style>
 </head>
 <body>
+    <!-- Skip link for keyboard navigation (WCAG 2.1) -->
+    <a href="#chart-section" class="skip-link">Skip to chart</a>
+
     <div class="container">
-        <h1>Claude Code GitHub Tracker</h1>
-        <p class="subtitle">Tracking Claude Code adoption across public GitHub commits</p>
+        <header>
+            <h1>Claude Code GitHub Tracker</h1>
+            <p class="subtitle">Tracking Claude Code adoption across public GitHub commits</p>
+        </header>
 
-        <div class="stats">
+        <section class="stats" aria-label="Summary statistics" role="region">
             <div class="stat-card">
-                <div class="stat-label">Latest date</div>
-                <div class="stat-value stat-date" id="stat-date">--</div>
+                <div class="stat-label" id="label-date">Latest date</div>
+                <div class="stat-value stat-date" id="stat-date" aria-labelledby="label-date">--</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">Total Commits</div>
-                <div class="stat-value stat-commits" id="stat-commits">--</div>
+                <div class="stat-label" id="label-commits">Total Commits</div>
+                <div class="stat-value stat-commits" id="stat-commits" aria-labelledby="label-commits" aria-live="polite">--</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">Adoption Rate</div>
-                <div class="stat-value stat-pct" id="stat-pct">--</div>
+                <div class="stat-label" id="label-pct">Adoption Rate</div>
+                <div class="stat-value stat-pct" id="stat-pct" aria-labelledby="label-pct" aria-live="polite">--</div>
             </div>
-        </div>
+        </section>
 
-        <div class="chart-container">
-            <div class="loading" id="loading">Loading data...</div>
-            <canvas id="chart" style="display:none"></canvas>
-        </div>
+        <main id="chart-section" class="chart-container" tabindex="-1">
+            <div class="loading" id="loading" role="status" aria-live="polite">Loading data...</div>
+            <canvas id="chart" style="display:none" role="img" aria-label="Chart showing daily GitHub total commits and Claude Code adoption rate over time"></canvas>
+        </main>
 
-        <footer>
+        <footer role="contentinfo">
             Source: <a href="https://github.com/AlbGri/claude-github-monitor">AlbGri/claude-github-monitor</a>
             &middot; Updated daily via GitHub Actions
         </footer>
@@ -115,6 +150,7 @@
 
     <script>
         const CSV_URL = 'https://raw.githubusercontent.com/AlbGri/claude-github-monitor/main/data/claude_commits_daily.csv';
+        const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
         async function loadData() {
             const resp = await fetch(CSV_URL);
@@ -127,10 +163,6 @@
                     return { date, claude, total, pct: total > 0 ? claude / total * 100 : 0 };
                 })
                 .filter(d => d.claude > 0);
-        }
-
-        function fmtK(v) {
-            return Math.round(v / 1000) + 'K';
         }
 
         function renderStats(data) {
@@ -159,7 +191,7 @@
                             backgroundColor: 'rgba(107, 114, 128, 0.06)',
                             fill: true,
                             yAxisID: 'y',
-                            tension: 0.3,
+                            tension: reducedMotion ? 0 : 0.3,
                             pointRadius: showPoints ? 2.5 : 0,
                             pointHoverRadius: 4,
                             borderWidth: 1.5,
@@ -171,7 +203,7 @@
                             backgroundColor: 'transparent',
                             fill: false,
                             yAxisID: 'y1',
-                            tension: 0.3,
+                            tension: reducedMotion ? 0 : 0.3,
                             pointRadius: showPoints ? 2.5 : 0,
                             pointHoverRadius: 4,
                             borderWidth: 2.5,
@@ -182,6 +214,7 @@
                     responsive: true,
                     maintainAspectRatio: true,
                     aspectRatio: 2.2,
+                    animation: reducedMotion ? false : { duration: 800 },
                     interaction: {
                         mode: 'index',
                         intersect: false,
