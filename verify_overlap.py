@@ -150,7 +150,7 @@ def main():
         print("\nDati completi: tutti gli SHA sono stati scaricati.")
 
     if shas_gen and len(overlap) / len(shas_gen) > 0.9:
-        print("\nConlusione: overlap alto -> usare max(co_authored, generated)")
+        print("\nConclusione: overlap alto -> usare max(co_authored, generated)")
     elif shas_gen:
         print("\nConclusione: overlap basso -> la somma aggiunge informazione")
 
