@@ -12,13 +12,21 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://albgri.github.io/claude-github-monitor/">
 
-    <!-- Performance: preconnect to CDN -->
-    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+    <!-- Content Security Policy -->
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'none';
+        script-src 'self' 'unsafe-inline';
+        style-src 'unsafe-inline';
+        connect-src https://raw.githubusercontent.com;
+        img-src 'self' data:;
+        base-uri 'self'
+    ">
+
+    <!-- Performance: preconnect for CSV fetch -->
     <link rel="preconnect" href="https://raw.githubusercontent.com" crossorigin>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js" defer></script>
+    <script src="vendor/chart.umd.min.js" defer></script>
+    <script src="vendor/chartjs-adapter-date-fns.bundle.min.js" defer></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -296,11 +304,13 @@
             });
         }
 
-        loadData()
-            .then(data => { renderStats(data); renderChart(data); })
-            .catch(err => {
-                document.getElementById('loading').textContent = 'Error loading data.';
-            });
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData()
+                .then(data => { renderStats(data); renderChart(data); })
+                .catch(() => {
+                    document.getElementById('loading').textContent = 'Error loading data.';
+                });
+        });
     </script>
 </body>
 </html>
