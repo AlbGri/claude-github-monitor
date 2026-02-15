@@ -8,11 +8,11 @@ This project monitors how widely [Claude Code](https://claude.ai/claude-code) is
 
 ## Latest Data
 
-| Date | Claude Commits* | Total Commits | % |
-|------|----------------:|--------------:|--:|
-| *Data collection in progress* | | | |
+| Date | Co-Authored | Generated | Total Commits | Adoption* |
+|------|------------:|----------:|--------------:|----------:|
+| *Data collection in progress* | | | | |
 
-*\*Claude commits is the sum of API counts across separate search queries and may include cross-query duplicates. Total commits is the denominator for adoption rate.*
+*\*Adoption = max(co\_authored, generated) / total\_commits. Using `max()` instead of `sum()` avoids double-counting commits that match both patterns.*
 
 ## Methodology
 
@@ -25,7 +25,9 @@ For each day, the script queries the [GitHub Commits Search API](https://docs.gi
 
 ### Data accuracy
 
-`claude_commits` is the sum of `total_count` values from two API queries. This is technically an **upper bound** because a commit matching both patterns is counted twice. However, the structural undercounting factors (see below) far outweigh this overlap, so the real number of Claude-authored commits is almost certainly **higher** than reported.
+The two search patterns have significant overlap: most Claude Code commits match both queries. The CSV stores each count separately (`co_authored`, `generated`) so the adoption rate can be computed as `max(co_authored, generated) / total_commits`, which is a **conservative lower bound**. A verification script (`verify_overlap.py`) can be used to empirically measure the overlap by comparing actual commit SHAs.
+
+Structural undercounting factors (private repos, trailer opt-out) far outweigh any remaining double-counting risk, so the real adoption is almost certainly **higher** than reported.
 
 GitHub [documents](https://docs.github.com/en/rest/search/search#about-search) that `total_count` may be an **approximation** for very large result sets. The exact margin is unspecified.
 
@@ -75,7 +77,7 @@ python claude_github_tracker.py
 python claude_github_tracker.py --from 2026-01-01 --to 2026-02-15 --skip-existing
 ```
 
-Output CSV is saved in `data/`.
+Output CSV (`data/claude_commits_daily.csv`) has four columns: `date`, `co_authored`, `generated`, `total_commits`.
 
 ## Automation
 
@@ -98,7 +100,7 @@ Manual runs are also supported via the "Run workflow" button in the Actions tab.
 
 - **Lower bound by design**: only **public** repositories are indexed. Private, internal, and enterprise usage is invisible.
 - **Trailer opt-out**: users can disable or modify the `Co-Authored-By` trailer, making those commits undetectable.
-- **Cross-query overlap**: `claude_commits` may double-count commits matching both search patterns (upper bound effect).
+- **Cross-query overlap**: the two patterns have high overlap; using `max()` avoids double-counting but may slightly undercount commits exclusive to the smaller query.
 - **API approximation**: GitHub's `total_count` may be approximate for large result sets, affecting both numerator and denominator.
 - **API rate limits**: the script uses 10 req/min (limit is 30 for authenticated users). Historical backfills take ~18 min per 365 days.
 

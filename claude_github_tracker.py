@@ -3,7 +3,7 @@
 Claude Code GitHub Tracker
 --------------------------
 Traccia l'adozione di Claude Code su GitHub analizzando i commit pubblici
-che contengono "Co-authored-by" + pattern Anthropic/Claude.
+che contengono pattern Anthropic/Claude.
 
 Usa la GitHub Search API (commits endpoint).
 
@@ -24,11 +24,13 @@ Uso:
   python claude_github_tracker.py
 
 Output CSV (data/claude_commits_daily.csv):
-  date, claude_commits, total_commits
+  date, co_authored, generated, total_commits
 
 Note:
-  - claude_commits e' la somma dei conteggi API per ciascuna query di ricerca.
-    Poiche' le query possono avere sovrapposizioni, il valore e' un upper bound.
+  - co_authored e generated sono i conteggi separati per ciascuna query.
+  - I due pattern possono avere sovrapposizione (uno stesso commit puo'
+    matchare entrambi). Usare max() per la stima conservativa, somma per
+    l'upper bound.
   - total_commits e' il numero totale di commit pubblici su GitHub per quel giorno
     (denominatore per calcolare la percentuale di adozione).
 """
@@ -63,14 +65,13 @@ API_BASE = "https://api.github.com"
 SEARCH_COMMITS_URL = f"{API_BASE}/search/commits"
 
 # Pattern di ricerca per identificare commit di Claude Code
-SEARCH_QUERIES = [
-    '"Co-authored-by" "anthropic.com"',
-    '"Generated with Claude Code"',
-]
+QUERY_CO_AUTHORED = '"Co-authored-by" "anthropic.com"'
+QUERY_GENERATED = '"Generated with Claude Code"'
 
 # File di output
 OUTPUT_DIR = Path("data")
 OUTPUT_CSV = OUTPUT_DIR / "claude_commits_daily.csv"
+CSV_FIELDS = ["date", "co_authored", "generated", "total_commits"]
 
 # Rate limiting
 REQUESTS_PER_MINUTE = 10  # conservativo (limite reale: 30 per autenticati)
@@ -129,31 +130,27 @@ def collect_day_data(date_str):
     """
     Raccoglie dati per un singolo giorno.
 
-    Per ciascuna query di ricerca legge total_count dall'API (una sola richiesta
-    per query), poi somma i conteggi. Infine recupera il totale di tutti i commit
-    pubblici come denominatore.
-
-    Nota: claude_commits somma i conteggi API di query diverse, quindi puo'
-    includere duplicati cross-query ed e' un upper bound.
+    Registra separatamente il conteggio per ciascun pattern di ricerca,
+    poi recupera il totale di tutti i commit pubblici come denominatore.
     """
-    claude_commits = 0
-
-    for query in SEARCH_QUERIES:
-        log.info("Cerco: %s per %s...", query, date_str)
-        count = get_commit_count(date_str, query)
-        log.info("  -> %d commit", count)
-        claude_commits += count
-        time.sleep(REQUEST_DELAY)
-
-    # Denominatore: tutti i commit pubblici del giorno
-    log.info("Recupero total commits per %s...", date_str)
+    log.info("Cerco: co_authored per %s...", date_str)
+    co_authored = get_commit_count(date_str, QUERY_CO_AUTHORED)
+    log.info("  -> %d commit", co_authored)
     time.sleep(REQUEST_DELAY)
+
+    log.info("Cerco: generated per %s...", date_str)
+    generated = get_commit_count(date_str, QUERY_GENERATED)
+    log.info("  -> %d commit", generated)
+    time.sleep(REQUEST_DELAY)
+
+    log.info("Recupero total commits per %s...", date_str)
     total_commits = get_commit_count(date_str)
     log.info("  Total commits on %s: %d", date_str, total_commits)
 
     return {
         "date": date_str,
-        "claude_commits": claude_commits,
+        "co_authored": co_authored,
+        "generated": generated,
         "total_commits": total_commits,
     }
 
@@ -168,7 +165,8 @@ def load_existing_data():
             for row in reader:
                 existing[row["date"]] = {
                     "date": row["date"],
-                    "claude_commits": int(row["claude_commits"]),
+                    "co_authored": int(row["co_authored"]),
+                    "generated": int(row["generated"]),
                     "total_commits": int(row["total_commits"]),
                 }
 
@@ -180,16 +178,10 @@ def save_daily_data(all_data):
     OUTPUT_DIR.mkdir(exist_ok=True)
 
     with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(
-            f, fieldnames=["date", "claude_commits", "total_commits"]
-        )
+        writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
         writer.writeheader()
         for day in sorted(all_data, key=lambda x: x["date"]):
-            writer.writerow({
-                "date": day["date"],
-                "claude_commits": day["claude_commits"],
-                "total_commits": day["total_commits"],
-            })
+            writer.writerow({k: day[k] for k in CSV_FIELDS})
 
 
 def generate_date_range(from_date, to_date):
@@ -204,28 +196,31 @@ def generate_date_range(from_date, to_date):
 
 def print_summary(all_data):
     """Stampa un riepilogo dei dati raccolti."""
-    print("\n" + "=" * 65)
+    print("\n" + "=" * 80)
     print("RIEPILOGO")
-    print("=" * 65)
-    print(f"{'Data':<14} {'Claude Commits':>15} {'Total Commits':>15} {'%':>8}")
-    print("-" * 65)
+    print("=" * 80)
+    print(f"{'Data':<14} {'Co-Authored':>12} {'Generated':>10} {'Total':>15} {'%max':>8}")
+    print("-" * 80)
     for day in sorted(all_data, key=lambda x: x["date"]):
         pct = ""
+        claude = max(day["co_authored"], day["generated"])
         if day["total_commits"] > 0:
-            pct = f"{day['claude_commits'] / day['total_commits'] * 100:.2f}%"
+            pct = f"{claude / day['total_commits'] * 100:.2f}%"
         print(
-            f"{day['date']:<14} {day['claude_commits']:>15,}"
+            f"{day['date']:<14} {day['co_authored']:>12,} {day['generated']:>10,}"
             f" {day['total_commits']:>15,} {pct:>8}"
         )
-    print("-" * 65)
+    print("-" * 80)
 
     if all_data:
-        total_claude = sum(d["claude_commits"] for d in all_data)
-        total_all = sum(d["total_commits"] for d in all_data)
-        pct = f"{total_claude / total_all * 100:.2f}%" if total_all > 0 else ""
+        tot_co = sum(d["co_authored"] for d in all_data)
+        tot_gen = sum(d["generated"] for d in all_data)
+        tot_all = sum(d["total_commits"] for d in all_data)
+        tot_max = sum(max(d["co_authored"], d["generated"]) for d in all_data)
+        pct = f"{tot_max / tot_all * 100:.2f}%" if tot_all > 0 else ""
         print(
-            f"{'TOTALE':<14} {total_claude:>15,}"
-            f" {total_all:>15,} {pct:>8}"
+            f"{'TOTALE':<14} {tot_co:>12,} {tot_gen:>10,}"
+            f" {tot_all:>15,} {pct:>8}"
         )
 
     print(f"\nDati salvati in: {OUTPUT_CSV}")
@@ -286,7 +281,8 @@ def main():
             log.error("Errore per %s: %s", date_str, e)
             error_data = {
                 "date": date_str,
-                "claude_commits": 0,
+                "co_authored": 0,
+                "generated": 0,
                 "total_commits": 0,
             }
             all_data[date_str] = error_data
