@@ -1,0 +1,40 @@
+name: Daily Claude Code Tracker
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # Every day at 06:00 UTC
+  workflow_dispatch: # Manual trigger
+
+permissions:
+  contents: write
+
+jobs:
+  track:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tracker
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+        run: python claude_github_tracker.py --date $(date -u +%Y-%m-%d) --skip-existing
+
+      - name: Commit and push updated data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git diff --quiet data/ || (
+            git add data/claude_commits_daily.csv data/claude_repos_daily.csv
+            git commit -m "data: update $(date -u +%Y-%m-%d)"
+            git push
+          )
