@@ -53,8 +53,8 @@
             margin-top: 0.15rem;
         }
         .stat-date { color: #6b7280; }
-        .stat-commits { color: #ea580c; }
-        .stat-pct { color: #2563eb; }
+        .stat-commits { color: #6b7280; }
+        .stat-pct { color: #ea580c; }
         .chart-container {
             background: #fff;
             border-radius: 12px;
@@ -93,7 +93,7 @@
                 <div class="stat-value stat-date" id="stat-date">--</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">Claude Commits</div>
+                <div class="stat-label">Total Commits</div>
                 <div class="stat-value stat-commits" id="stat-commits">--</div>
             </div>
             <div class="stat-card">
@@ -136,7 +136,7 @@
         function renderStats(data) {
             const d = data[data.length - 1];
             document.getElementById('stat-date').textContent = d.date;
-            document.getElementById('stat-commits').textContent = fmtK(d.claude);
+            document.getElementById('stat-commits').textContent = (d.total / 1000000).toFixed(1) + 'M';
             document.getElementById('stat-pct').textContent = d.pct.toFixed(1) + '%';
         }
 
@@ -153,29 +153,28 @@
                     labels: data.map(d => d.date),
                     datasets: [
                         {
-                            label: 'Claude Commits',
-                            data: data.map(d => d.claude),
-                            borderColor: '#ea580c',
-                            backgroundColor: 'rgba(234, 88, 12, 0.08)',
+                            label: 'Total Commits',
+                            data: data.map(d => d.total),
+                            borderColor: '#6b7280',
+                            backgroundColor: 'rgba(107, 114, 128, 0.06)',
                             fill: true,
                             yAxisID: 'y',
                             tension: 0.3,
                             pointRadius: showPoints ? 2.5 : 0,
                             pointHoverRadius: 4,
-                            borderWidth: 2,
+                            borderWidth: 1.5,
                         },
                         {
-                            label: 'Adoption Rate',
+                            label: 'Claude Code Adoption',
                             data: data.map(d => d.pct),
-                            borderColor: '#2563eb',
+                            borderColor: '#ea580c',
                             backgroundColor: 'transparent',
                             fill: false,
                             yAxisID: 'y1',
                             tension: 0.3,
                             pointRadius: showPoints ? 2.5 : 0,
                             pointHoverRadius: 4,
-                            borderWidth: 2,
-                            borderDash: [6, 3],
+                            borderWidth: 2.5,
                         }
                     ]
                 },
@@ -203,13 +202,13 @@
                             position: 'left',
                             title: {
                                 display: true,
-                                text: 'Claude Commits',
-                                color: '#ea580c',
+                                text: 'Total Commits',
+                                color: '#6b7280',
                                 font: { size: 12, weight: '600' },
                             },
                             ticks: {
-                                callback: v => fmtK(v),
-                                color: '#ea580c',
+                                callback: v => (v / 1000000).toFixed(1) + 'M',
+                                color: '#6b7280',
                                 font: { size: 11 },
                             },
                             grid: { color: 'rgba(0,0,0,0.04)' },
@@ -220,13 +219,13 @@
                             position: 'right',
                             title: {
                                 display: true,
-                                text: 'Adoption Rate',
-                                color: '#2563eb',
+                                text: 'Claude Code Adoption',
+                                color: '#ea580c',
                                 font: { size: 12, weight: '600' },
                             },
                             ticks: {
                                 callback: v => v.toFixed(1) + '%',
-                                color: '#2563eb',
+                                color: '#ea580c',
                                 font: { size: 11 },
                             },
                             grid: { display: false },
@@ -243,9 +242,9 @@
                             callbacks: {
                                 label: function(ctx) {
                                     if (ctx.datasetIndex === 0) {
-                                        return 'Claude Commits: ' + ctx.raw.toLocaleString();
+                                        return 'Total Commits: ' + ctx.raw.toLocaleString();
                                     }
-                                    return 'Adoption Rate: ' + ctx.raw.toFixed(1) + '%';
+                                    return 'Claude Code Adoption: ' + ctx.raw.toFixed(1) + '%';
                                 }
                             }
                         },
