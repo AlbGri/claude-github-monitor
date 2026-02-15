@@ -2,17 +2,17 @@
 
 **Tracking Claude Code adoption across public GitHub repositories.**
 
-This project monitors how widely [Claude Code](https://claude.ai/claude-code) is used across public GitHub repositories by analyzing commit metadata via the GitHub Search API. It runs daily, collecting the number of repositories where Claude Code contributed to at least one commit.
+This project monitors how widely [Claude Code](https://claude.ai/claude-code) is used across public GitHub repositories by analyzing commit metadata via the GitHub Search API. It runs daily, collecting the number of Claude-attributed commits and comparing them to the total number of public commits.
 
 <!-- Badges placeholder -->
 
 ## Latest Data
 
-| Date       | Distinct Repos | Total Commits* |
-|------------|---------------:|---------------:|
-| 2026-02-10 |            987 |        172,676 |
+| Date | Claude Commits* | Total Commits | % |
+|------|----------------:|--------------:|--:|
+| *Data collection in progress* | | | |
 
-*\*Total commits is the sum of API counts across separate search queries and may include cross-query duplicates. Distinct repos is deduplicated and is the primary reliable metric.*
+*\*Claude commits is the sum of API counts across separate search queries and may include cross-query duplicates. Total commits is the denominator for adoption rate.*
 
 ## Methodology
 
@@ -21,14 +21,14 @@ The tracker searches for public commits matching these patterns:
 1. **`"Co-authored-by" "anthropic.com"`** -- Claude Code automatically appends a `Co-Authored-By` trailer with an `@anthropic.com` email to every commit it creates.
 2. **`"Generated with Claude Code"`** -- Some users include this tag in commit messages (from the Claude Code README badge).
 
-For each day, the script queries the [GitHub Commits Search API](https://docs.github.com/en/rest/search/search?apiVersion=2022-11-28#search-commits), paginates through results (up to the API limit of 1,000 items per query), and extracts repository names. Repositories are deduplicated across queries using a set, making `distinct_repos` the most accurate metric.
+For each day, the script queries the [GitHub Commits Search API](https://docs.github.com/en/rest/search/search?apiVersion=2022-11-28#search-commits) and reads the `total_count` field from the response. This requires only one API request per query (no pagination needed), making the data collection fast and efficient.
 
-### Known limitations of the methodology
+### Known limitations
 
-- The API returns a maximum of **1,000 results per query**. Days with more matching commits will have accurate `total_count` from the API but incomplete repository coverage.
 - Only **public repositories** are indexed. Private and internal repos are excluded.
 - Users can **disable or modify** the Co-Authored-By trailer, so the real adoption is higher than what this tracker captures.
-- `total_commits` sums counts from two separate queries that may overlap, making it an **upper bound**.
+- `claude_commits` sums counts from two separate queries that may overlap, making it an **upper bound**.
+- `total_commits` (all public commits for that day) is queried as a denominator for computing adoption rate.
 
 ## Setup
 
@@ -76,7 +76,7 @@ python claude_github_tracker.py
 python claude_github_tracker.py --from 2026-01-01 --to 2026-02-15 --skip-existing
 ```
 
-Output CSVs are saved in `data/`.
+Output CSV is saved in `data/`.
 
 ## Automation
 
@@ -84,8 +84,8 @@ A GitHub Action (`.github/workflows/daily-track.yml`) runs the tracker automatic
 
 1. Checks out the repository
 2. Installs Python and dependencies
-3. Runs the tracker for the current date with `--skip-existing`
-4. Commits and pushes updated CSVs back to the repository
+3. Runs the tracker for the previous day (complete data) with `--skip-existing`
+4. Commits and pushes updated CSV back to the repository
 
 The action uses a repository secret `GH_PAT` for API authentication. To set it up:
 
@@ -97,10 +97,10 @@ Manual runs are also supported via the "Run workflow" button in the Actions tab.
 
 ## Limitations
 
-- **Underestimate**: this tracker captures a lower bound of real Claude Code usage. Private repos, modified trailers, and the 1,000-result API cap all contribute to undercounting.
+- **Underestimate**: this tracker captures a lower bound of real Claude Code usage. Private repos, modified trailers all contribute to undercounting.
 - **API rate limits**: authenticated users get 30 search requests per minute. The script uses a conservative 10 req/min to avoid hitting limits.
 - **Public repos only**: no visibility into enterprise or private usage.
-- **Cross-query duplicates**: `total_commits` may count the same commit twice if it matches both search patterns. `distinct_repos` is deduplicated.
+- **Cross-query duplicates**: `claude_commits` may count the same commit twice if it matches both search patterns.
 
 ## Related
 

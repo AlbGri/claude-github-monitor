@@ -23,11 +23,14 @@ Uso:
   # Ultima settimana (default se nessun parametro)
   python claude_github_tracker.py
 
+Output CSV (data/claude_commits_daily.csv):
+  date, claude_commits, total_commits
+
 Note:
-  - total_commits e' la somma dei conteggi API per ciascuna query di ricerca.
+  - claude_commits e' la somma dei conteggi API per ciascuna query di ricerca.
     Poiche' le query possono avere sovrapposizioni, il valore e' un upper bound.
-  - distinct_repos e' il conteggio deduplicato dei repository e rappresenta
-    la metrica piu' affidabile.
+  - total_commits e' il numero totale di commit pubblici su GitHub per quel giorno
+    (denominatore per calcolare la percentuale di adozione).
 """
 
 import os
@@ -68,7 +71,6 @@ SEARCH_QUERIES = [
 # File di output
 OUTPUT_DIR = Path("data")
 OUTPUT_CSV = OUTPUT_DIR / "claude_commits_daily.csv"
-OUTPUT_REPOS_CSV = OUTPUT_DIR / "claude_repos_daily.csv"
 
 # Rate limiting
 REQUESTS_PER_MINUTE = 10  # conservativo (limite reale: 30 per autenticati)
@@ -85,34 +87,20 @@ def get_headers():
     }
     if GITHUB_TOKEN:
         headers["Authorization"] = f"Bearer {GITHUB_TOKEN}"
-    else:
-        log.warning("Nessun GITHUB_TOKEN impostato.")
-        log.warning("Senza token il rate limit e' molto basso (10 req/min).")
-        log.warning("Crea un token su https://github.com/settings/tokens")
     return headers
 
 
-def search_commits_for_date(date_str, query):
+def get_commit_count(date_str, query=""):
     """
-    Cerca commit per una data specifica con una query.
-    Ritorna (total_count, set_repo_names, items_campione).
+    Interroga l'API per il total_count di commit che matchano la query per una data.
+
+    Usa una singola richiesta con per_page=1 per leggere solo total_count,
+    senza scaricare i dettagli degli item.
     """
-    full_query = f"{query} committer-date:{date_str}"
-    params = {
-        "q": full_query,
-        "per_page": 100,
-        "page": 1,
-        "sort": "committer-date",
-        "order": "desc",
-    }
+    q = f"{query} committer-date:{date_str}" if query else f"committer-date:{date_str}"
+    params = {"q": q, "per_page": 1}
 
-    repos = set()
-    total_count = 0
-    sample_items = []
-    page = 1
-
-    while True:
-        params["page"] = page
+    try:
         response = requests.get(
             SEARCH_COMMITS_URL,
             headers=get_headers(),
@@ -124,75 +112,54 @@ def search_commits_for_date(date_str, query):
             wait = max(reset_time - int(time.time()), 10)
             log.warning("Rate limit raggiunto, attendo %ds...", wait)
             time.sleep(wait)
-            continue
+            return get_commit_count(date_str, query)
 
-        if response.status_code == 422:
-            log.error("Errore 422 per query: %s", full_query)
-            break
+        if response.status_code == 200:
+            count = response.json().get("total_count", 0)
+            return count
 
-        if response.status_code != 200:
-            log.error("Errore %d: %s", response.status_code, response.text[:200])
-            break
+        log.warning("Query failed for %s (HTTP %d): %s", date_str, response.status_code, q)
+    except Exception as e:
+        log.error("Error querying %s: %s", date_str, e)
 
-        data = response.json()
-        total_count = data.get("total_count", 0)
-        items = data.get("items", [])
-
-        if not items:
-            break
-
-        for item in items:
-            repo = item.get("repository", {}).get("full_name", "")
-            if repo:
-                repos.add(repo)
-            if len(sample_items) < 5:
-                sample_items.append({
-                    "sha": item.get("sha", "")[:8],
-                    "repo": repo,
-                    "message": item.get("commit", {}).get("message", "")[:120],
-                    "date": item.get("commit", {}).get("committer", {}).get("date", ""),
-                })
-
-        if len(items) < 100 or page * 100 >= min(total_count, 1000):
-            break
-
-        page += 1
-        time.sleep(REQUEST_DELAY)
-
-    return total_count, repos, sample_items
+    return 0
 
 
 def collect_day_data(date_str):
     """
-    Raccoglie dati per un singolo giorno, combinando tutte le query di ricerca.
+    Raccoglie dati per un singolo giorno.
 
-    Nota: total_commits somma i conteggi API di query diverse, quindi puo'
-    includere duplicati. distinct_repos e' deduplicato ed e' la metrica primaria.
+    Per ciascuna query di ricerca legge total_count dall'API (una sola richiesta
+    per query), poi somma i conteggi. Infine recupera il totale di tutti i commit
+    pubblici come denominatore.
+
+    Nota: claude_commits somma i conteggi API di query diverse, quindi puo'
+    includere duplicati cross-query ed e' un upper bound.
     """
-    all_repos = set()
-    total_commits = 0
-    all_samples = []
+    claude_commits = 0
 
     for query in SEARCH_QUERIES:
         log.info("Cerco: %s per %s...", query, date_str)
-        count, repos, samples = search_commits_for_date(date_str, query)
-        log.info("  -> %d commit, %d repo distinti", count, len(repos))
-        total_commits += count
-        all_repos.update(repos)
-        all_samples.extend(samples)
+        count = get_commit_count(date_str, query)
+        log.info("  -> %d commit", count)
+        claude_commits += count
         time.sleep(REQUEST_DELAY)
+
+    # Denominatore: tutti i commit pubblici del giorno
+    log.info("Recupero total commits per %s...", date_str)
+    time.sleep(REQUEST_DELAY)
+    total_commits = get_commit_count(date_str)
+    log.info("  Total commits on %s: %d", date_str, total_commits)
 
     return {
         "date": date_str,
+        "claude_commits": claude_commits,
         "total_commits": total_commits,
-        "distinct_repos": len(all_repos),
-        "repos": sorted(all_repos),
-        "samples": all_samples[:5],
     }
 
 
 def load_existing_data():
-    """Carica dati esistenti da entrambi i CSV per preservarli tra le esecuzioni."""
+    """Carica dati esistenti dal CSV per preservarli tra le esecuzioni."""
     existing = {}
 
     if OUTPUT_CSV.exists():
@@ -201,42 +168,28 @@ def load_existing_data():
             for row in reader:
                 existing[row["date"]] = {
                     "date": row["date"],
+                    "claude_commits": int(row["claude_commits"]),
                     "total_commits": int(row["total_commits"]),
-                    "distinct_repos": int(row["distinct_repos"]),
-                    "repos": [],
-                    "samples": [],
                 }
-
-    if OUTPUT_REPOS_CSV.exists():
-        with open(OUTPUT_REPOS_CSV, "r", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                if row["date"] in existing:
-                    existing[row["date"]]["repos"].append(row["repo"])
 
     return existing
 
 
 def save_daily_data(all_data):
-    """Salva i dati giornalieri nei CSV."""
+    """Salva i dati giornalieri nel CSV."""
     OUTPUT_DIR.mkdir(exist_ok=True)
 
     with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["date", "total_commits", "distinct_repos"])
+        writer = csv.DictWriter(
+            f, fieldnames=["date", "claude_commits", "total_commits"]
+        )
         writer.writeheader()
         for day in sorted(all_data, key=lambda x: x["date"]):
             writer.writerow({
                 "date": day["date"],
+                "claude_commits": day["claude_commits"],
                 "total_commits": day["total_commits"],
-                "distinct_repos": day["distinct_repos"],
             })
-
-    with open(OUTPUT_REPOS_CSV, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["date", "repo"])
-        writer.writeheader()
-        for day in sorted(all_data, key=lambda x: x["date"]):
-            for repo in day["repos"]:
-                writer.writerow({"date": day["date"], "repo": repo})
 
 
 def generate_date_range(from_date, to_date):
@@ -251,30 +204,31 @@ def generate_date_range(from_date, to_date):
 
 def print_summary(all_data):
     """Stampa un riepilogo dei dati raccolti."""
-    print("\n" + "=" * 60)
+    print("\n" + "=" * 65)
     print("RIEPILOGO")
-    print("=" * 60)
-    print(f"{'Data':<14} {'Commit':>10} {'Repo distinti':>15}")
-    print("-" * 60)
+    print("=" * 65)
+    print(f"{'Data':<14} {'Claude Commits':>15} {'Total Commits':>15} {'%':>8}")
+    print("-" * 65)
     for day in sorted(all_data, key=lambda x: x["date"]):
-        print(f"{day['date']:<14} {day['total_commits']:>10} {day['distinct_repos']:>15}")
-    print("-" * 60)
+        pct = ""
+        if day["total_commits"] > 0:
+            pct = f"{day['claude_commits'] / day['total_commits'] * 100:.2f}%"
+        print(
+            f"{day['date']:<14} {day['claude_commits']:>15,}"
+            f" {day['total_commits']:>15,} {pct:>8}"
+        )
+    print("-" * 65)
 
     if all_data:
-        total_commits = sum(d["total_commits"] for d in all_data)
-        all_repos = set()
-        for d in all_data:
-            all_repos.update(d["repos"])
-        print(f"{'TOTALE':<14} {total_commits:>10} {len(all_repos):>15}")
-
-    if all_data and all_data[0].get("samples"):
-        print("\nEsempi di commit trovati:")
-        for s in all_data[0]["samples"][:3]:
-            print(f"  [{s['sha']}] {s['repo']}")
-            print(f"           {s['message'][:80]}")
+        total_claude = sum(d["claude_commits"] for d in all_data)
+        total_all = sum(d["total_commits"] for d in all_data)
+        pct = f"{total_claude / total_all * 100:.2f}%" if total_all > 0 else ""
+        print(
+            f"{'TOTALE':<14} {total_claude:>15,}"
+            f" {total_all:>15,} {pct:>8}"
+        )
 
     print(f"\nDati salvati in: {OUTPUT_CSV}")
-    print(f"Lista repo in:  {OUTPUT_REPOS_CSV}")
 
 
 # --- Main ---
@@ -287,6 +241,11 @@ def main():
     parser.add_argument("--skip-existing", action="store_true",
                         help="Salta date gia' presenti nel CSV")
     args = parser.parse_args()
+
+    if not GITHUB_TOKEN:
+        log.warning("Nessun GITHUB_TOKEN impostato.")
+        log.warning("Senza token il rate limit e' molto basso (10 req/min).")
+        log.warning("Crea un token su https://github.com/settings/tokens")
 
     # Determina il range di date
     if args.date:
@@ -327,10 +286,8 @@ def main():
             log.error("Errore per %s: %s", date_str, e)
             error_data = {
                 "date": date_str,
+                "claude_commits": 0,
                 "total_commits": 0,
-                "distinct_repos": 0,
-                "repos": [],
-                "samples": [],
             }
             all_data[date_str] = error_data
             new_data.append(error_data)
