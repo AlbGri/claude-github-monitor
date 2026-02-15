@@ -104,6 +104,28 @@
         }
         footer a { color: #6b7280; text-decoration: none; }
         footer a:hover { text-decoration: underline; }
+        .timeline {
+            margin-top: 1.25rem;
+            background: #fff;
+            border-radius: 10px;
+            padding: 1rem 1.25rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        }
+        .timeline h2 {
+            font-size: 0.8rem;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+        .timeline ul {
+            list-style: none;
+            font-size: 0.85rem;
+            color: #4b5563;
+        }
+        .timeline li {
+            padding: 0.2rem 0;
+        }
         .loading {
             text-align: center;
             padding: 4rem;
@@ -136,11 +158,11 @@
                 <div class="stat-value stat-date" id="stat-date" aria-labelledby="label-date">--</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label" id="label-commits">Total Commits</div>
+                <div class="stat-label" id="label-commits">Total Commits (7d avg)</div>
                 <div class="stat-value stat-commits" id="stat-commits" aria-labelledby="label-commits" aria-live="polite">--</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label" id="label-pct">Adoption Rate</div>
+                <div class="stat-label" id="label-pct">Adoption Rate (7d avg)</div>
                 <div class="stat-value stat-pct" id="stat-pct" aria-labelledby="label-pct" aria-live="polite">--</div>
             </div>
         </section>
@@ -149,6 +171,19 @@
             <div class="loading" id="loading" role="status" aria-live="polite">Loading data...</div>
             <canvas id="chart" style="display:none" role="img" aria-label="Chart showing daily GitHub total commits and Claude Code adoption rate over time"></canvas>
         </main>
+
+        <section class="timeline" aria-label="Key events">
+            <h2>Key events</h2>
+            <ul>
+                <li>2026-02-05: Claude Opus 4.6</li>
+                <li>2025-11-24: Claude Opus 4.5</li>
+                <li>2025-10-20: Claude Code on the web</li>
+                <li>2025-09-29: Claude Sonnet 4.5</li>
+                <li>2025-08-05: Claude Opus 4.1</li>
+                <li>2025-05-22: Claude Opus 4 + Sonnet 4</li>
+                <li>2025-02-24: Claude Code launch</li>
+            </ul>
+        </section>
 
         <footer role="contentinfo">
             Source: <a href="https://github.com/AlbGri/claude-github-monitor">AlbGri/claude-github-monitor</a>
@@ -176,10 +211,14 @@
         }
 
         function renderStats(data) {
-            const d = data[data.length - 1];
-            document.getElementById('stat-date').textContent = d.date;
-            document.getElementById('stat-commits').textContent = (d.total / 1000000).toFixed(1) + 'M';
-            document.getElementById('stat-pct').textContent = d.pct.toFixed(1) + '%';
+            const last7 = data.slice(-7);
+            const avgTotal = last7.reduce((s, d) => s + d.total, 0) / last7.length;
+            const sumClaude = last7.reduce((s, d) => s + d.claude, 0);
+            const sumTotal = last7.reduce((s, d) => s + d.total, 0);
+            const pct7d = sumTotal > 0 ? sumClaude / sumTotal * 100 : 0;
+            document.getElementById('stat-date').textContent = data[data.length - 1].date;
+            document.getElementById('stat-commits').textContent = (avgTotal / 1000000).toFixed(1) + 'M';
+            document.getElementById('stat-pct').textContent = pct7d.toFixed(1) + '%';
         }
 
         function renderChart(data) {

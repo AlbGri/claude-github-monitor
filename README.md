@@ -8,11 +8,9 @@ This project monitors how widely [Claude Code](https://claude.ai/claude-code) is
 
 ## Latest Data
 
-| Date | Co-Authored | Generated | Total Commits | Adoption* |
-|------|------------:|----------:|--------------:|----------:|
-| *Data collection in progress* | | | | |
+**[Live Dashboard](https://albgri.github.io/claude-github-monitor/)** -- Interactive chart with daily trends and 7-day averages.
 
-*\*Adoption = max(co\_authored, generated) / total\_commits. Using `max()` instead of `sum()` avoids double-counting commits that match both patterns.*
+*Adoption = max(co\_authored, generated) / total\_commits. Using `max()` instead of `sum()` avoids double-counting commits that match both patterns.*
 
 ## Methodology
 
