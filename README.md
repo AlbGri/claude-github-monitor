@@ -23,12 +23,11 @@ The tracker searches for public commits matching these patterns:
 
 For each day, the script queries the [GitHub Commits Search API](https://docs.github.com/en/rest/search/search?apiVersion=2022-11-28#search-commits) and reads the `total_count` field from the response. This requires only one API request per query (no pagination needed), making the data collection fast and efficient.
 
-### Known limitations
+### Data accuracy
 
-- Only **public repositories** are indexed. Private and internal repos are excluded.
-- Users can **disable or modify** the Co-Authored-By trailer, so the real adoption is higher than what this tracker captures.
-- `claude_commits` sums counts from two separate queries that may overlap, making it an **upper bound**.
-- `total_commits` (all public commits for that day) is queried as a denominator for computing adoption rate.
+`claude_commits` is the sum of `total_count` values from two API queries. This is technically an **upper bound** because a commit matching both patterns is counted twice. However, the structural undercounting factors (see below) far outweigh this overlap, so the real number of Claude-authored commits is almost certainly **higher** than reported.
+
+GitHub [documents](https://docs.github.com/en/rest/search/search#about-search) that `total_count` may be an **approximation** for very large result sets. The exact margin is unspecified.
 
 ## Setup
 
@@ -97,10 +96,11 @@ Manual runs are also supported via the "Run workflow" button in the Actions tab.
 
 ## Limitations
 
-- **Underestimate**: this tracker captures a lower bound of real Claude Code usage. Private repos, modified trailers all contribute to undercounting.
-- **API rate limits**: authenticated users get 30 search requests per minute. The script uses a conservative 10 req/min to avoid hitting limits.
-- **Public repos only**: no visibility into enterprise or private usage.
-- **Cross-query duplicates**: `claude_commits` may count the same commit twice if it matches both search patterns.
+- **Lower bound by design**: only **public** repositories are indexed. Private, internal, and enterprise usage is invisible.
+- **Trailer opt-out**: users can disable or modify the `Co-Authored-By` trailer, making those commits undetectable.
+- **Cross-query overlap**: `claude_commits` may double-count commits matching both search patterns (upper bound effect).
+- **API approximation**: GitHub's `total_count` may be approximate for large result sets, affecting both numerator and denominator.
+- **API rate limits**: the script uses 10 req/min (limit is 30 for authenticated users). Historical backfills take ~18 min per 365 days.
 
 ## Related
 
