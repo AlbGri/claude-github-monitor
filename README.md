@@ -2,7 +2,7 @@
 
 **Tracking Claude Code adoption across public GitHub repositories.**
 
-This project monitors how widely [Claude Code](https://claude.ai/claude-code) is used across public GitHub repositories by analyzing commit metadata via the GitHub Search API. It runs daily, collecting the number of Claude-attributed commits and comparing them to the total number of public commits.
+This project monitors how widely [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview) is used across public GitHub repositories by analyzing commit metadata via the GitHub Search API. It runs daily, collecting the number of Claude-attributed commits and comparing them to the total number of public commits.
 
 <!-- Badges placeholder -->
 
@@ -104,7 +104,6 @@ Manual runs are also supported via the "Run workflow" button in the Actions tab.
 
 ## Related
 
-- [SemiAnalysis - "Anthropic - All Hands On Deck"](https://semianalysis.com/) -- Industry analysis referencing Claude Code's share of GitHub commits
 - [GitHub Archive](https://www.gharchive.org/) -- Public dataset of all GitHub events (alternative data source for deeper analysis)
 - [Anthropic](https://www.anthropic.com/) -- Maker of Claude Code
 
