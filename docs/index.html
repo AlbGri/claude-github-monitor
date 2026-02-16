@@ -91,10 +91,38 @@
         .stat-commits { color: #6b7280; }
         .stat-pct { color: #ea580c; }
         .chart-container {
+            position: relative;
             background: #fff;
             border-radius: 12px;
             padding: 1.25rem 1.25rem 0.75rem;
             box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        }
+        .fullscreen-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            background: rgba(0,0,0,0.05);
+            border: none;
+            border-radius: 6px;
+            padding: 0.35rem 0.5rem;
+            cursor: pointer;
+            color: #6b7280;
+            font-size: 0.75rem;
+            z-index: 10;
+            line-height: 1;
+        }
+        .fullscreen-btn:hover { background: rgba(0,0,0,0.1); }
+        .chart-container:fullscreen,
+        .chart-container:-webkit-full-screen {
+            background: #fff;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .chart-container:fullscreen canvas,
+        .chart-container:-webkit-full-screen canvas {
+            max-height: 90vh;
         }
         footer {
             margin-top: 1.5rem;
@@ -104,28 +132,6 @@
         }
         footer a { color: #6b7280; text-decoration: none; }
         footer a:hover { text-decoration: underline; }
-        .timeline {
-            margin-top: 1.25rem;
-            background: #fff;
-            border-radius: 10px;
-            padding: 1rem 1.25rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-        }
-        .timeline h2 {
-            font-size: 0.8rem;
-            color: #9ca3af;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 0.5rem;
-        }
-        .timeline ul {
-            list-style: none;
-            font-size: 0.85rem;
-            color: #4b5563;
-        }
-        .timeline li {
-            padding: 0.2rem 0;
-        }
         .loading {
             text-align: center;
             padding: 4rem;
@@ -136,6 +142,7 @@
             .stats { grid-template-columns: 1fr; }
             .stat-card { padding: 0.75rem 1rem; }
             h1 { font-size: 1.3rem; }
+            .chart-container canvas { min-height: 260px; }
         }
         @media (prefers-reduced-motion: reduce) {
             * { transition: none !important; }
@@ -168,22 +175,10 @@
         </section>
 
         <main id="chart-section" class="chart-container" tabindex="-1">
+            <button class="fullscreen-btn" id="fullscreen-btn" aria-label="Toggle fullscreen" title="Fullscreen">&#x26F6;</button>
             <div class="loading" id="loading" role="status" aria-live="polite">Loading data...</div>
             <canvas id="chart" style="display:none" role="img" aria-label="Chart showing daily GitHub total commits and Claude Code adoption rate over time"></canvas>
         </main>
-
-        <section class="timeline" aria-label="Key events">
-            <h2>Key events</h2>
-            <ul>
-                <li>2026-02-05: Claude Opus 4.6</li>
-                <li>2025-11-24: Claude Opus 4.5</li>
-                <li>2025-10-20: Claude Code on the web</li>
-                <li>2025-09-29: Claude Sonnet 4.5</li>
-                <li>2025-08-05: Claude Opus 4.1</li>
-                <li>2025-05-22: Claude Opus 4 + Sonnet 4</li>
-                <li>2025-02-24: Claude Code launch</li>
-            </ul>
-        </section>
 
         <footer role="contentinfo">
             Source: <a href="https://github.com/AlbGri/claude-github-monitor">AlbGri/claude-github-monitor</a>
@@ -194,6 +189,70 @@
     <script>
         const CSV_URL = 'https://raw.githubusercontent.com/AlbGri/claude-github-monitor/main/data/claude_commits_daily.csv';
         const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        const RELEASES = [
+            { date: '2025-02-24', label: '3.7 Sonnet',  color: 'rgba(59, 130, 246, 0.07)' },
+            { date: '2025-05-22', label: 'Opus 4',      color: 'rgba(34, 197, 94, 0.07)' },
+            { date: '2025-08-05', label: 'Opus 4.1',    color: 'rgba(168, 85, 247, 0.07)' },
+            { date: '2025-09-29', label: 'Sonnet 4.5',  color: 'rgba(234, 179, 8, 0.07)' },
+            { date: '2025-10-20', label: 'Code Web',    color: 'rgba(20, 184, 166, 0.07)' },
+            { date: '2025-11-24', label: 'Opus 4.5',    color: 'rgba(244, 63, 94, 0.07)' },
+            { date: '2026-02-05', label: 'Opus 4.6',    color: 'rgba(249, 115, 22, 0.07)' },
+        ];
+
+        const releaseBandsPlugin = {
+            id: 'releaseBands',
+            beforeDraw(chart) {
+                const { ctx, chartArea, scales } = chart;
+                if (!chartArea) return;
+                const xScale = scales.x;
+
+                RELEASES.forEach((release, i) => {
+                    const x1 = xScale.getPixelForValue(new Date(release.date));
+                    const x2 = i < RELEASES.length - 1
+                        ? xScale.getPixelForValue(new Date(RELEASES[i + 1].date))
+                        : chartArea.right;
+
+                    const left = Math.max(x1, chartArea.left);
+                    const right = Math.min(x2, chartArea.right);
+                    if (left >= chartArea.right || right <= chartArea.left) return;
+
+                    ctx.save();
+                    // Band
+                    ctx.fillStyle = release.color;
+                    ctx.fillRect(left, chartArea.top, right - left, chartArea.bottom - chartArea.top);
+                    // Dashed vertical line
+                    ctx.strokeStyle = release.color.replace(/[\d.]+\)$/, '0.25)');
+                    ctx.lineWidth = 1;
+                    ctx.setLineDash([4, 4]);
+                    ctx.beginPath();
+                    ctx.moveTo(Math.max(x1, chartArea.left), chartArea.top);
+                    ctx.lineTo(Math.max(x1, chartArea.left), chartArea.bottom);
+                    ctx.stroke();
+                    // Label at top
+                    if (right - left > 35) {
+                        ctx.fillStyle = '#9ca3af';
+                        ctx.font = '9px -apple-system, BlinkMacSystemFont, sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(release.label, (left + right) / 2, chartArea.top + 11);
+                    }
+                    ctx.restore();
+                });
+            }
+        };
+
+        // Fullscreen toggle
+        document.getElementById('fullscreen-btn').addEventListener('click', () => {
+            const el = document.getElementById('chart-section');
+            if (!document.fullscreenElement) {
+                const p = el.requestFullscreen ? el.requestFullscreen() : el.webkitRequestFullscreen ? el.webkitRequestFullscreen() : Promise.resolve();
+                Promise.resolve(p).then(() => {
+                    try { screen.orientation.lock('landscape'); } catch(e) {}
+                });
+            } else {
+                document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen();
+            }
+        });
 
         async function loadData() {
             const resp = await fetch(CSV_URL);
@@ -230,6 +289,7 @@
 
             new Chart(canvas, {
                 type: 'line',
+                plugins: [releaseBandsPlugin],
                 data: {
                     labels: data.map(d => d.date),
                     datasets: [
@@ -327,6 +387,10 @@
                                         return 'Total Commits: ' + ctx.raw.toLocaleString();
                                     }
                                     return 'Claude Code Adoption: ' + ctx.raw.toFixed(1) + '%';
+                                },
+                                afterBody: function(ctx) {
+                                    const d = data[ctx[0].dataIndex];
+                                    return 'Claude Commits: ' + d.claude.toLocaleString();
                                 }
                             }
                         },
