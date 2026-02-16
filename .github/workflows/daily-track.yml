@@ -27,7 +27,7 @@ jobs:
       - name: Run tracker
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
-        run: python claude_github_tracker.py --date $(date -u -d yesterday +%Y-%m-%d) --skip-existing
+        run: python claude_github_tracker.py --skip-existing
 
       - name: Commit and push updated data
         run: |

@@ -275,18 +275,13 @@ def main():
         log.info("[%d/%d] Analisi %s...", i + 1, len(dates), date_str)
         try:
             day_data = collect_day_data(date_str)
+            if day_data["total_commits"] == 0:
+                log.warning("Dati non validi per %s (total_commits=0), skip.", date_str)
+                continue
             all_data[date_str] = day_data
             new_data.append(day_data)
         except Exception as e:
-            log.error("Errore per %s: %s", date_str, e)
-            error_data = {
-                "date": date_str,
-                "co_authored": 0,
-                "generated": 0,
-                "total_commits": 0,
-            }
-            all_data[date_str] = error_data
-            new_data.append(error_data)
+            log.error("Errore per %s: %s, skip.", date_str, e)
 
         # Salva progressivamente (tutti i dati: esistenti + nuovi)
         save_daily_data(list(all_data.values()))
