@@ -66,7 +66,7 @@
         }
         .stats {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             gap: 0.75rem;
             margin-bottom: 1.25rem;
         }
@@ -75,6 +75,8 @@
             border-radius: 10px;
             padding: 1rem 1.25rem;
             box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            display: flex;
+            flex-direction: column;
         }
         .stat-label {
             font-size: 0.7rem;
@@ -85,10 +87,11 @@
         .stat-value {
             font-size: 1.4rem;
             font-weight: 700;
-            margin-top: 0.15rem;
+            margin-top: auto;
         }
         .stat-date { color: #6b7280; }
         .stat-commits { color: #6b7280; }
+        .stat-claude { color: #2563eb; }
         .stat-pct { color: #ea580c; }
         .chart-container {
             position: relative;
@@ -139,7 +142,7 @@
         }
         @media (max-width: 600px) {
             .container { padding: 1.5rem 1rem; }
-            .stats { grid-template-columns: 1fr; }
+            .stats { grid-template-columns: repeat(2, 1fr); }
             .stat-card { padding: 0.75rem 1rem; }
             h1 { font-size: 1.3rem; }
             .chart-container canvas { min-height: 260px; }
@@ -165,8 +168,12 @@
                 <div class="stat-value stat-date" id="stat-date" aria-labelledby="label-date">--</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label" id="label-commits">Total Commits (7d avg)</div>
-                <div class="stat-value stat-commits" id="stat-commits" aria-labelledby="label-commits" aria-live="polite">--</div>
+                <div class="stat-label" id="label-total">Total Commits (7d avg)</div>
+                <div class="stat-value stat-commits" id="stat-total" aria-labelledby="label-total" aria-live="polite">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label" id="label-claude">Claude Commits (7d avg)</div>
+                <div class="stat-value stat-claude" id="stat-claude" aria-labelledby="label-claude" aria-live="polite">--</div>
             </div>
             <div class="stat-card">
                 <div class="stat-label" id="label-pct">Adoption Rate (7d avg)</div>
@@ -272,11 +279,13 @@
         function renderStats(data) {
             const last7 = data.slice(-7);
             const avgTotal = last7.reduce((s, d) => s + d.total, 0) / last7.length;
+            const avgClaude = last7.reduce((s, d) => s + d.claude, 0) / last7.length;
             const sumClaude = last7.reduce((s, d) => s + d.claude, 0);
             const sumTotal = last7.reduce((s, d) => s + d.total, 0);
             const pct7d = sumTotal > 0 ? sumClaude / sumTotal * 100 : 0;
             document.getElementById('stat-date').textContent = data[data.length - 1].date;
-            document.getElementById('stat-commits').textContent = (avgTotal / 1000000).toFixed(1) + 'M';
+            document.getElementById('stat-total').textContent = (avgTotal / 1000000).toFixed(1) + 'M';
+            document.getElementById('stat-claude').textContent = (avgClaude / 1000).toFixed(1) + 'K';
             document.getElementById('stat-pct').textContent = pct7d.toFixed(1) + '%';
         }
 
@@ -294,10 +303,10 @@
                     labels: data.map(d => d.date),
                     datasets: [
                         {
-                            label: 'Total Commits',
-                            data: data.map(d => d.total),
-                            borderColor: '#6b7280',
-                            backgroundColor: 'rgba(107, 114, 128, 0.06)',
+                            label: 'Claude Commits',
+                            data: data.map(d => d.claude),
+                            borderColor: '#2563eb',
+                            backgroundColor: 'rgba(37, 99, 235, 0.06)',
                             fill: true,
                             yAxisID: 'y',
                             tension: reducedMotion ? 0 : 0.3,
@@ -306,7 +315,7 @@
                             borderWidth: 1.5,
                         },
                         {
-                            label: 'Claude Code Adoption',
+                            label: 'Adoption Rate',
                             data: data.map(d => d.pct),
                             borderColor: '#ea580c',
                             backgroundColor: 'transparent',
@@ -344,24 +353,24 @@
                             position: 'left',
                             title: {
                                 display: true,
-                                text: 'Total Commits',
-                                color: '#6b7280',
+                                text: 'Claude Commits',
+                                color: '#2563eb',
                                 font: { size: 12, weight: '600' },
                             },
                             ticks: {
-                                callback: v => (v / 1000000).toFixed(1) + 'M',
-                                color: '#6b7280',
+                                callback: v => (v / 1000).toFixed(0) + 'K',
+                                color: '#2563eb',
                                 font: { size: 11 },
                             },
                             grid: { color: 'rgba(0,0,0,0.04)' },
-                            beginAtZero: false,
+                            beginAtZero: true,
                         },
                         y1: {
                             type: 'linear',
                             position: 'right',
                             title: {
                                 display: true,
-                                text: 'Claude Code Adoption',
+                                text: 'Adoption Rate',
                                 color: '#ea580c',
                                 font: { size: 12, weight: '600' },
                             },
@@ -384,13 +393,13 @@
                             callbacks: {
                                 label: function(ctx) {
                                     if (ctx.datasetIndex === 0) {
-                                        return 'Total Commits: ' + ctx.raw.toLocaleString();
+                                        return 'Claude Commits: ' + ctx.raw.toLocaleString();
                                     }
-                                    return 'Claude Code Adoption: ' + ctx.raw.toFixed(1) + '%';
+                                    return 'Adoption Rate: ' + ctx.raw.toFixed(1) + '%';
                                 },
                                 afterBody: function(ctx) {
                                     const d = data[ctx[0].dataIndex];
-                                    return 'Claude Commits: ' + d.claude.toLocaleString();
+                                    return 'Total Commits: ' + d.total.toLocaleString();
                                 }
                             }
                         },
