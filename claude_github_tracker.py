@@ -250,7 +250,7 @@ def main():
         to_dt = datetime.strptime(args.to_date, "%Y-%m-%d") if args.to_date else datetime.now()
         dates = generate_date_range(from_dt, to_dt)
     else:
-        to_dt = datetime.now()
+        to_dt = datetime.now() - timedelta(days=1)  # ieri, per evitare dati parziali
         from_dt = to_dt - timedelta(days=7)
         dates = generate_date_range(from_dt, to_dt)
 
