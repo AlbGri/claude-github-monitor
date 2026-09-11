@@ -121,6 +121,11 @@ Manual runs are also supported via the "Run workflow" button in the Actions tab.
 - [GitHub Archive](https://www.gharchive.org/) -- Public dataset of all GitHub events (alternative data source for deeper analysis)
 - [Anthropic](https://www.anthropic.com/) -- Maker of Claude Code
 
+## Changelog
+
+Notable changes are recorded in [CHANGELOG.md](CHANGELOG.md). Version 1.0.0 removed
+the adoption-rate metric and added the per-model breakdown.
+
 ## License
 
 [MIT](LICENSE)
