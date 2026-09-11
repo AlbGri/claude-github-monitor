@@ -162,6 +162,44 @@
             margin-right: 0.35rem;
             vertical-align: baseline;
         }
+        /* Quiet by default: one muted line until someone wants the detail. */
+        .other-detail {
+            margin-top: 0.75rem;
+            font-size: 0.8rem;
+            color: #6b7280;
+        }
+        .other-detail summary {
+            cursor: pointer;
+            padding: 0.35rem 0.25rem;
+            list-style: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.1rem;
+            border-radius: 6px;
+        }
+        .other-detail summary::-webkit-details-marker { display: none; }
+        .other-detail summary::after {
+            content: '\25BE';
+            font-size: 0.7em;
+            margin-left: 0.4rem;
+            transition: transform 0.15s;
+        }
+        .other-detail[open] summary::after { transform: rotate(180deg); }
+        .other-detail summary:hover { color: #1a1a1a; }
+        .other-detail summary:focus-visible { outline: 2px solid #2a78d6; outline-offset: 2px; }
+        .other-body {
+            background: #fff;
+            border-radius: 10px;
+            padding: 0.9rem 1.25rem 1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            margin-top: 0.35rem;
+        }
+        .other-body p {
+            margin-bottom: 0.6rem;
+            color: #6b7280;
+            font-size: 0.78rem;
+        }
+        .other-body table { font-size: 0.78rem; }
         footer {
             margin-top: 1.5rem;
             text-align: center;
@@ -232,6 +270,11 @@
             </div>
         </main>
 
+        <details class="other-detail" id="other-detail" hidden>
+            <summary><span class="swatch" style="background:#52514e"></span>What is in Other?</summary>
+            <div class="other-body" id="other-body"></div>
+        </details>
+
         <footer role="contentinfo">
             Source: <a href="https://github.com/AlbGri/claude-github-monitor">AlbGri/claude-github-monitor</a>
             &middot; Updated daily via GitHub Actions
@@ -293,18 +336,26 @@
             });
 
             // date -> {model: commits}, with unslotted models folded into Other.
+            // otherByDate keeps them unfolded so the Other panel can show its parts.
             const byDate = new Map();
+            const otherByDate = new Map();
             models.forEach(r => {
                 const n = parseInt(r.commits, 10);
                 if (!Number.isFinite(n) || n <= 0) return;
-                const key = SLOT_NAMES.includes(r.model) ? r.model : OTHER[0];
+                const known = SLOT_NAMES.includes(r.model);
                 if (!byDate.has(r.date)) byDate.set(r.date, {});
                 const row = byDate.get(r.date);
+                const key = known ? r.model : OTHER[0];
                 row[key] = (row[key] || 0) + n;
+                if (!known) {
+                    if (!otherByDate.has(r.date)) otherByDate.set(r.date, {});
+                    const o = otherByDate.get(r.date);
+                    o[r.model] = (o[r.model] || 0) + n;
+                }
             });
 
             const dates = [...byDate.keys()].sort();
-            return { totals, byDate, dates };
+            return { totals, byDate, otherByDate, dates };
         }
 
         function renderStats({ totals, byDate, dates }) {
@@ -455,6 +506,46 @@
             }).join('');
         }
 
+        const esc = s => String(s).replace(/[&<>"]/g, c =>
+            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+        function renderOther({ byDate, otherByDate, dates }) {
+            const sums = {};
+            dates.forEach(d => Object.entries(otherByDate.get(d) || {})
+                .forEach(([m, n]) => { sums[m] = (sums[m] || 0) + n; }));
+
+            const rows = Object.entries(sums).sort((a, b) => b[1] - a[1]);
+            if (!rows.length) return;
+
+            const otherTotal = rows.reduce((s, [, n]) => s + n, 0);
+            const grand = dates.reduce((s, d) =>
+                s + Object.values(byDate.get(d)).reduce((a, b) => a + b, 0), 0);
+
+            const last7 = dates.slice(-7);
+            const recent = {};
+            last7.forEach(d => Object.entries(otherByDate.get(d) || {})
+                .forEach(([m, n]) => { recent[m] = (recent[m] || 0) + n; }));
+
+            document.getElementById('other-body').innerHTML =
+                '<p>The chart names eight models. Everything else is grouped here: '
+                + rows.length + ' entries, together '
+                + (otherTotal / grand * 100).toFixed(1) + '% of all commits since '
+                + dates[0] + '. <em>Unnamed</em> is the trailer form used before it '
+                + 'started naming the model.</p>'
+                + '<table><thead><tr><th scope="col">Model</th><th scope="col">Commits</th>'
+                + '<th scope="col">Share of Other</th><th scope="col">Last 7d, per day</th>'
+                + '</tr></thead><tbody>'
+                + rows.map(([m, n]) =>
+                    '<tr><th scope="row">' + esc(m) + '</th>'
+                    + '<td>' + n.toLocaleString() + '</td>'
+                    + '<td>' + (n / otherTotal * 100).toFixed(1) + '%</td>'
+                    + '<td>' + Math.round((recent[m] || 0) / last7.length).toLocaleString() + '</td></tr>'
+                ).join('')
+                + '</tbody></table>';
+
+            document.getElementById('other-detail').hidden = false;
+        }
+
         document.getElementById('fullscreen-btn').addEventListener('click', () => {
             const el = document.getElementById('chart-section');
             if (!document.fullscreenElement) {
@@ -476,7 +567,10 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             loadData()
-                .then(data => { renderStats(data); renderChart(data); renderTable(data); })
+                .then(data => {
+                    renderStats(data); renderChart(data);
+                    renderTable(data); renderOther(data);
+                })
                 .catch(err => {
                     console.error(err);
                     document.getElementById('loading').textContent = 'Error loading data.';
