@@ -47,7 +47,7 @@ import logging
 import time
 import argparse
 import statistics
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 try:
@@ -287,6 +287,17 @@ def save_model_data(all_models: dict[str, dict[str, int]]) -> None:
 
 # --- Output ---
 
+def utc_today() -> datetime:
+    """Data odierna in UTC, come la vede committer-date nella Search API.
+
+    La GitHub Action gira in UTC, una macchina locale quasi mai: usando l'ora
+    locale, una corsa serale in Europa chiederebbe un giorno UTC ancora in corso e
+    scriverebbe dati parziali, che --skip-existing poi non correggerebbe piu'.
+    """
+    now = datetime.now(timezone.utc)
+    return datetime(now.year, now.month, now.day)
+
+
 def generate_date_range(from_date: datetime, to_date: datetime) -> list[str]:
     """Genera la lista di date tra from_date e to_date, estremi inclusi."""
     dates = []
@@ -349,12 +360,12 @@ def main() -> None:
         dates = [args.date]
     elif args.from_date:
         from_dt = datetime.strptime(args.from_date, "%Y-%m-%d")
-        to_dt = datetime.strptime(args.to_date, "%Y-%m-%d") if args.to_date else datetime.now()
+        to_dt = datetime.strptime(args.to_date, "%Y-%m-%d") if args.to_date else utc_today()
         dates = generate_date_range(from_dt, to_dt)
     else:
         # Finestra larga: con --skip-existing costa un giorno solo, ma permette di
         # recuperare da un'interruzione del workflow fino a 30 giorni.
-        to_dt = datetime.now() - timedelta(days=1)  # ieri, per evitare dati parziali
+        to_dt = utc_today() - timedelta(days=1)  # ieri, per evitare dati parziali
         from_dt = to_dt - timedelta(days=30)
         dates = generate_date_range(from_dt, to_dt)
 
