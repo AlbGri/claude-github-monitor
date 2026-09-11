@@ -22,6 +22,10 @@ Every run checks **coverage**: the per-model counts divided by the day's total. 
 
 Model phrases must always carry the full version number including the decimal. GitHub's search tokenizes `4.8`, so the phrase `Co-Authored-By: Claude Opus 4` also matches 4.6, 4.7 and 4.8 -- measured on 2026-09-05, 40,010 against the 39,774 of the three variants summed.
 
+A name with no decimal cannot be separated that way, so `Sonnet 4` is the one phrase that carries the full trailer including `<noreply@anthropic.com>`. That form is exact but **not** a general fix: the trailer address is not always `noreply@anthropic.com`, and appending it drops Opus 5 by 29% and Fable 5 by 87%. Use it only to break a collision.
+
+A single failed query invalidates the whole day rather than dropping one model. Skipping just the failed model looked safer until 2026-09-03 was written without Opus 5 -- 432,000 commits missing -- and `--skip-existing` then treated the day as complete.
+
 Counts drift upward slightly when a date is re-read later, because GitHub's commit index is still catching up at capture time: 2026-09-05 was captured at 736,312 and read back six days later at 829,757. Structural undercounting (private repos, trailer opt-out) is far larger, so the real figure is in any case **higher** than reported.
 
 ### Why there is no adoption rate

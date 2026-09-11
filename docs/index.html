@@ -247,18 +247,23 @@
 
         // Fixed slot assignment: colour follows the model, never its rank, so the
         // chart does not repaint when volumes reorder. Stack order is slot order,
-        // which is the ordering the palette was validated on (adjacent pairs).
-        // Adding a model means giving it a slot here; everything else folds into Other.
+        // which is the ordering the palette was validated on (adjacent pairs), and
+        // it runs oldest to newest so the stack reads as generational succession.
+        // Adding a model means giving it a slot here; everything else folds into
+        // Other, which wears a neutral ink rather than a ninth categorical hue.
         const MODEL_SLOTS = [
-            ['Unnamed',    '#2a78d6'],
-            ['Opus 4.5',   '#eb6834'],
+            ['Opus 4.5',   '#2a78d6'],
+            ['Opus 4.6',   '#eb6834'],
             ['Sonnet 4.6', '#1baf7a'],
-            ['Opus 4.6',   '#eda100'],
+            ['Opus 4.7',   '#eda100'],
             ['Opus 4.8',   '#e87ba4'],
             ['Sonnet 5',   '#008300'],
             ['Fable 5',    '#4a3aa7'],
             ['Opus 5',     '#e34948'],
         ];
+        // Unnamed, Sonnet 4.5, Sonnet 4 and Haiku 4.5 land here: 5.4% of the whole
+        // series, and "commits we cannot attribute to a named model" is what the
+        // bucket means anyway.
         const OTHER = ['Other', '#52514e'];
         const SLOT_NAMES = MODEL_SLOTS.map(s => s[0]);
 

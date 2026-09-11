@@ -177,19 +177,26 @@ def load_model_queries() -> list[tuple[str, str]]:
 
 def collect_model_data(
     date_str: str, model_queries: list[tuple[str, str]], delay: float
-) -> dict[str, int]:
+) -> dict[str, int] | None:
     """Raccoglie i conteggi per modello di un singolo giorno.
 
-    Un modello che fallisce non blocca il giorno: viene saltato e segnalato. I modelli
-    con zero commit non entrano nel risultato, per tenere compatto il CSV.
+    Una sola query fallita invalida il giorno intero. Saltare il singolo modello
+    sembrava piu' robusto, ma il 2026-09-03 e' stato scritto senza Opus 5 - 432.000
+    commit persi in un giorno - e da quel momento --skip-existing lo considerava
+    completo. Meglio non scrivere nulla e riprovare alla corsa successiva.
+
+    Returns:
+        La mappa modello -> commit, senza i modelli a zero per tenere compatto il
+        CSV, oppure None se una qualsiasi query e' fallita.
     """
     counts = {}
 
     for i, (model, phrase) in enumerate(model_queries):
         count = get_commit_count(date_str, f'"{phrase}"')
         if count is None:
-            log.warning("  %s: query fallita, modello saltato", model)
-        elif count > 0:
+            log.warning("  %s: query fallita, giorno invalidato", model)
+            return None
+        if count > 0:
             counts[model] = count
 
         if i < len(model_queries) - 1:
@@ -392,6 +399,8 @@ def main() -> None:
                 time.sleep(delay)
 
             models = collect_model_data(date_str, model_queries, delay)
+            if models is None:
+                raise RuntimeError("query per modello fallita")
             if not models:
                 raise RuntimeError("nessun conteggio per modello raccolto")
 
