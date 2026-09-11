@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Claude Code GitHub Tracker</title>
-    <meta name="description" content="Daily tracking of Claude Code adoption across public GitHub commits. Interactive chart with adoption rate trends.">
+    <meta name="description" content="Daily tracking of Claude Code adoption across public GitHub commits, broken down by Claude model.">
 
     <!-- Open Graph for LinkedIn / social sharing -->
     <meta property="og:title" content="Claude Code GitHub Tracker">
-    <meta property="og:description" content="Daily tracking of Claude Code adoption across public GitHub commits.">
+    <meta property="og:description" content="Daily tracking of Claude Code adoption across public GitHub commits, broken down by Claude model.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://albgri.github.io/claude-github-monitor/">
 
@@ -46,9 +46,7 @@
             z-index: 100;
             text-decoration: none;
         }
-        .skip-link:focus {
-            top: 0;
-        }
+        .skip-link:focus { top: 0; }
         .container {
             max-width: 960px;
             margin: 0 auto;
@@ -89,10 +87,10 @@
             font-weight: 700;
             margin-top: auto;
         }
-        .stat-date { color: #6b7280; }
-        .stat-commits { color: #6b7280; }
-        .stat-claude { color: #2563eb; }
-        .stat-pct { color: #ea580c; }
+        /* Values wear text tokens, not series colors: the swatch beside a model
+           name in the legend and table carries identity, the number does not. */
+        .stat-value { color: #1a1a1a; }
+        .stat-muted { color: #6b7280; }
         .chart-container {
             position: relative;
             background: #fff;
@@ -100,21 +98,27 @@
             padding: 1.25rem 1.25rem 0.75rem;
             box-shadow: 0 1px 3px rgba(0,0,0,0.06);
         }
-        .fullscreen-btn {
+        .chart-tools {
             position: absolute;
             top: 0.5rem;
             right: 0.5rem;
+            display: flex;
+            gap: 0.35rem;
+            z-index: 10;
+        }
+        .tool-btn {
             background: rgba(0,0,0,0.05);
             border: none;
             border-radius: 6px;
             padding: 0.35rem 0.5rem;
             cursor: pointer;
-            color: #6b7280;
+            color: #52514e;
             font-size: 0.75rem;
-            z-index: 10;
             line-height: 1;
+            font-family: inherit;
         }
-        .fullscreen-btn:hover { background: rgba(0,0,0,0.1); }
+        .tool-btn:hover { background: rgba(0,0,0,0.1); }
+        .tool-btn[aria-pressed="true"] { background: #1a1a1a; color: #fff; }
         .chart-container:fullscreen,
         .chart-container:-webkit-full-screen {
             background: #fff;
@@ -126,6 +130,37 @@
         .chart-container:fullscreen canvas,
         .chart-container:-webkit-full-screen canvas {
             max-height: 90vh;
+        }
+        .table-wrap {
+            overflow-x: auto;
+            margin-top: 1.75rem;
+        }
+        table {
+            border-collapse: collapse;
+            font-size: 0.8rem;
+            width: 100%;
+            white-space: nowrap;
+        }
+        th, td {
+            padding: 0.35rem 0.6rem;
+            text-align: right;
+            border-bottom: 1px solid #f0efec;
+        }
+        th:first-child, td:first-child { text-align: left; }
+        thead th {
+            color: #52514e;
+            font-weight: 600;
+            border-bottom: 1px solid #d9d8d4;
+        }
+        tbody td { color: #52514e; font-variant-numeric: tabular-nums; }
+        tbody td:last-child { color: #1a1a1a; font-weight: 600; }
+        .swatch {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 2px;
+            margin-right: 0.35rem;
+            vertical-align: baseline;
         }
         footer {
             margin-top: 1.5rem;
@@ -159,32 +194,42 @@
     <div class="container">
         <header>
             <h1>Claude Code GitHub Tracker</h1>
-            <p class="subtitle">Tracking Claude Code adoption across public GitHub commits</p>
+            <p class="subtitle">Public GitHub commits carrying the Claude Code <code>Co-Authored-By</code> trailer, broken down by model</p>
         </header>
 
         <section class="stats" aria-label="Summary statistics" role="region">
             <div class="stat-card">
                 <div class="stat-label" id="label-date">Latest date</div>
-                <div class="stat-value stat-date" id="stat-date" aria-labelledby="label-date">--</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label" id="label-total">Total Commits (7d avg)</div>
-                <div class="stat-value stat-commits" id="stat-total" aria-labelledby="label-total" aria-live="polite">--</div>
+                <div class="stat-value stat-muted" id="stat-date" aria-labelledby="label-date">--</div>
             </div>
             <div class="stat-card">
                 <div class="stat-label" id="label-claude">Claude Commits (7d avg)</div>
-                <div class="stat-value stat-claude" id="stat-claude" aria-labelledby="label-claude" aria-live="polite">--</div>
+                <div class="stat-value" id="stat-claude" aria-labelledby="label-claude" aria-live="polite">--</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label" id="label-pct">Adoption Rate (7d avg)</div>
-                <div class="stat-value stat-pct" id="stat-pct" aria-labelledby="label-pct" aria-live="polite">--</div>
+                <div class="stat-label" id="label-growth">Growth vs 30d ago</div>
+                <div class="stat-value" id="stat-growth" aria-labelledby="label-growth" aria-live="polite">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label" id="label-model">Leading model (7d)</div>
+                <div class="stat-value" id="stat-model" aria-labelledby="label-model" aria-live="polite">--</div>
             </div>
         </section>
 
         <main id="chart-section" class="chart-container" tabindex="-1">
-            <button class="fullscreen-btn" id="fullscreen-btn" aria-label="Toggle fullscreen" title="Fullscreen">&#x26F6;</button>
+            <div class="chart-tools">
+                <button class="tool-btn" id="table-btn" aria-pressed="false" title="Toggle data table">Table</button>
+                <button class="tool-btn" id="fullscreen-btn" aria-label="Toggle fullscreen" title="Fullscreen">&#x26F6;</button>
+            </div>
             <div class="loading" id="loading" role="status" aria-live="polite">Loading data...</div>
-            <canvas id="chart" style="display:none" role="img" aria-label="Chart showing daily GitHub total commits and Claude Code adoption rate over time"></canvas>
+            <canvas id="chart" style="display:none" role="img" aria-label="Stacked area chart of daily Claude Code commits on public GitHub, split by Claude model"></canvas>
+            <div class="table-wrap" id="table-wrap" hidden>
+                <table id="data-table">
+                    <caption class="stat-label" style="text-align:left;padding-bottom:0.5rem">Last 14 days, commits per model</caption>
+                    <thead><tr id="table-head"></tr></thead>
+                    <tbody id="table-body"></tbody>
+                </table>
+            </div>
         </main>
 
         <footer role="contentinfo">
@@ -194,108 +239,117 @@
     </div>
 
     <script>
-        const CSV_URL = 'https://raw.githubusercontent.com/AlbGri/claude-github-monitor/main/data/claude_commits_daily.csv';
+        const RAW = 'https://raw.githubusercontent.com/AlbGri/claude-github-monitor/main/data/';
+        const DAILY_CSV = RAW + 'claude_commits_daily.csv';
+        const MODEL_CSV = RAW + 'claude_commits_by_model.csv';
+        const SURFACE = '#ffffff';
         const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-        const RELEASES_CSV_URL = 'https://raw.githubusercontent.com/AlbGri/claude-github-monitor/main/data/model_releases.csv';
-        let RELEASES = [];
+        // Fixed slot assignment: colour follows the model, never its rank, so the
+        // chart does not repaint when volumes reorder. Stack order is slot order,
+        // which is the ordering the palette was validated on (adjacent pairs).
+        // Adding a model means giving it a slot here; everything else folds into Other.
+        const MODEL_SLOTS = [
+            ['Unnamed',    '#2a78d6'],
+            ['Opus 4.5',   '#eb6834'],
+            ['Sonnet 4.6', '#1baf7a'],
+            ['Opus 4.6',   '#eda100'],
+            ['Opus 4.8',   '#e87ba4'],
+            ['Sonnet 5',   '#008300'],
+            ['Fable 5',    '#4a3aa7'],
+            ['Opus 5',     '#e34948'],
+        ];
+        const OTHER = ['Other', '#52514e'];
+        const SLOT_NAMES = MODEL_SLOTS.map(s => s[0]);
 
-        async function loadReleases() {
-            const resp = await fetch(RELEASES_CSV_URL);
+        let chart = null;
+
+        async function fetchCsv(url) {
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error(url + ': HTTP ' + resp.status);
             const text = await resp.text();
-            RELEASES = text.trim().split('\n').slice(1).map(line => {
-                const [date, label, colorRaw] = line.split(',');
-                return { date, label, color: colorRaw.replace(/;/g, ',') };
+            // Split on \r?\n: csv.writer emits CRLF, and a stray \r would end up
+            // inside the last column name, silently emptying every parsed row.
+            const lines = text.trim().split(/\r?\n/);
+            const cols = lines[0].split(',').map(c => c.trim());
+            return lines.slice(1).map(line => {
+                const parts = line.split(',').map(p => p.trim());
+                return Object.fromEntries(cols.map((c, i) => [c, parts[i]]));
             });
         }
 
-        function getModelForDate(dateStr) {
-            for (let i = RELEASES.length - 1; i >= 0; i--) {
-                if (dateStr >= RELEASES[i].date) return RELEASES[i].label;
-            }
-            return null;
-        }
-
-        const releaseBandsPlugin = {
-            id: 'releaseBands',
-            beforeDraw(chart) {
-                const { ctx, chartArea, scales } = chart;
-                if (!chartArea) return;
-                const xScale = scales.x;
-
-                RELEASES.forEach((release, i) => {
-                    const x1 = xScale.getPixelForValue(new Date(release.date));
-                    const x2 = i < RELEASES.length - 1
-                        ? xScale.getPixelForValue(new Date(RELEASES[i + 1].date))
-                        : chartArea.right;
-
-                    const left = Math.max(x1, chartArea.left);
-                    const right = Math.min(x2, chartArea.right);
-                    if (left >= chartArea.right || right <= chartArea.left) return;
-
-                    ctx.save();
-                    // Band
-                    ctx.fillStyle = release.color;
-                    ctx.fillRect(left, chartArea.top, right - left, chartArea.bottom - chartArea.top);
-                    // Dashed vertical line
-                    ctx.strokeStyle = release.color.replace(/[\d.]+\)$/, '0.25)');
-                    ctx.lineWidth = 1;
-                    ctx.setLineDash([4, 4]);
-                    ctx.beginPath();
-                    ctx.moveTo(Math.max(x1, chartArea.left), chartArea.top);
-                    ctx.lineTo(Math.max(x1, chartArea.left), chartArea.bottom);
-                    ctx.stroke();
-                    // Label at top
-                    if (right - left > 35) {
-                        ctx.fillStyle = '#9ca3af';
-                        ctx.font = '9px -apple-system, BlinkMacSystemFont, sans-serif';
-                        ctx.textAlign = 'center';
-                        ctx.fillText(release.label, (left + right) / 2, chartArea.top + 11);
-                    }
-                    ctx.restore();
-                });
-            }
-        };
-
-        // Fullscreen toggle
-        document.getElementById('fullscreen-btn').addEventListener('click', () => {
-            const el = document.getElementById('chart-section');
-            if (!document.fullscreenElement) {
-                const p = el.requestFullscreen ? el.requestFullscreen() : el.webkitRequestFullscreen ? el.webkitRequestFullscreen() : Promise.resolve();
-                Promise.resolve(p).then(() => {
-                    try { screen.orientation.lock('landscape'); } catch(e) {}
-                });
-            } else {
-                document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen();
-            }
-        });
-
         async function loadData() {
-            const resp = await fetch(CSV_URL);
-            const text = await resp.text();
-            return text.trim().split('\n').slice(1)
-                .map(line => {
-                    const [date, co, gen, tc] = line.split(',');
-                    const coAuthored = parseInt(co, 10);
-                    const generated = parseInt(gen, 10);
-                    const total = parseInt(tc, 10);
-                    const claude = Math.max(coAuthored, generated);
-                    return { date, coAuthored, generated, claude, total, pct: total > 0 ? claude / total * 100 : 0 };
-                })
-                .filter(d => d.claude > 0);
+            const [daily, models] = await Promise.all([fetchCsv(DAILY_CSV), fetchCsv(MODEL_CSV)]);
+
+            const totals = new Map();
+            daily.forEach(r => {
+                const n = parseInt(r.co_authored, 10);
+                if (Number.isFinite(n) && n > 0) totals.set(r.date, n);
+            });
+
+            // date -> {model: commits}, with unslotted models folded into Other.
+            const byDate = new Map();
+            models.forEach(r => {
+                const n = parseInt(r.commits, 10);
+                if (!Number.isFinite(n) || n <= 0) return;
+                const key = SLOT_NAMES.includes(r.model) ? r.model : OTHER[0];
+                if (!byDate.has(r.date)) byDate.set(r.date, {});
+                const row = byDate.get(r.date);
+                row[key] = (row[key] || 0) + n;
+            });
+
+            const dates = [...byDate.keys()].sort();
+            return { totals, byDate, dates };
         }
 
-        function renderStats(data) {
-            const last7 = data.slice(-7);
-            const avgTotal = last7.reduce((s, d) => s + d.total, 0) / last7.length;
-            const avgClaude = last7.reduce((s, d) => s + d.claude, 0) / last7.length;
-            const sumClaude = last7.reduce((s, d) => s + d.claude, 0);
-            const sumTotal = last7.reduce((s, d) => s + d.total, 0);
-            const pct7d = sumTotal > 0 ? sumClaude / sumTotal * 100 : 0;
-            document.getElementById('stat-date').textContent = data[data.length - 1].date;
-            document.getElementById('stat-total').textContent = (avgTotal / 1000000).toFixed(1) + 'M';
-            document.getElementById('stat-claude').textContent = (avgClaude / 1000).toFixed(1) + 'K';
-            document.getElementById('stat-pct').textContent = pct7d.toFixed(1) + '%';
+        function renderStats({ totals, byDate, dates }) {
+            const all = [...totals.keys()].sort();
+            const last = all[all.length - 1];
+            const avg = keys => keys.reduce((s, d) => s + (totals.get(d) || 0), 0) / keys.length;
+
+            const recent = all.slice(-7);
+            const prior = all.slice(-37, -30);
+            const avgRecent = avg(recent);
+
+            document.getElementById('stat-date').textContent = last;
+            document.getElementById('stat-claude').textContent = (avgRecent / 1000).toFixed(0) + 'K';
+
+            if (prior.length === 7) {
+                const growth = (avgRecent / avg(prior) - 1) * 100;
+                document.getElementById('stat-growth').textContent =
+                    (growth >= 0 ? '+' : '') + growth.toFixed(1) + '%';
+            }
+
+            // Leading model over the last 7 days for which we have a breakdown.
+            const window7 = dates.slice(-7);
+            const sums = {};
+            window7.forEach(d => {
+                Object.entries(byDate.get(d)).forEach(([m, n]) => { sums[m] = (sums[m] || 0) + n; });
+            });
+            const entries = Object.entries(sums);
+            if (entries.length) {
+                const total = entries.reduce((s, [, n]) => s + n, 0);
+                const [name, n] = entries.sort((a, b) => b[1] - a[1])[0];
+                document.getElementById('stat-model').textContent =
+                    name + ' ' + Math.round(n / total * 100) + '%';
+            }
+        }
+
+        function buildDatasets({ byDate, dates }) {
+            const slots = [...MODEL_SLOTS, OTHER];
+            return slots
+                .map(([name, color]) => ({
+                    label: name,
+                    data: dates.map(d => byDate.get(d)[name] || 0),
+                    borderColor: SURFACE,   // 2px surface gap between stacked fills
+                    borderWidth: 1.5,
+                    backgroundColor: color,
+                    fill: true,
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    tension: 0,
+                }))
+                .filter(ds => ds.data.some(v => v > 0));
         }
 
         function renderChart(data) {
@@ -303,137 +357,123 @@
             const canvas = document.getElementById('chart');
             canvas.style.display = 'block';
 
-            const showPoints = data.length <= 90;
-
-            new Chart(canvas, {
+            chart = new Chart(canvas, {
                 type: 'line',
-                plugins: [releaseBandsPlugin],
-                data: {
-                    labels: data.map(d => d.date),
-                    datasets: [
-                        {
-                            label: 'Claude Commits',
-                            data: data.map(d => d.claude),
-                            borderColor: '#2563eb',
-                            backgroundColor: 'rgba(37, 99, 235, 0.06)',
-                            fill: true,
-                            yAxisID: 'y',
-                            tension: reducedMotion ? 0 : 0.3,
-                            pointRadius: showPoints ? 2.5 : 0,
-                            pointHoverRadius: 4,
-                            borderWidth: 1.5,
-                        },
-                        {
-                            label: 'Adoption Rate',
-                            data: data.map(d => d.pct),
-                            borderColor: '#ea580c',
-                            backgroundColor: 'transparent',
-                            fill: false,
-                            yAxisID: 'y1',
-                            tension: reducedMotion ? 0 : 0.3,
-                            pointRadius: showPoints ? 2.5 : 0,
-                            pointHoverRadius: 4,
-                            borderWidth: 2.5,
-                        }
-                    ]
-                },
+                data: { labels: data.dates, datasets: buildDatasets(data) },
                 options: {
                     responsive: true,
                     maintainAspectRatio: true,
                     aspectRatio: 2.2,
-                    animation: reducedMotion ? false : { duration: 800 },
-                    interaction: {
-                        mode: 'index',
-                        intersect: false,
-                    },
+                    animation: reducedMotion ? false : { duration: 600 },
+                    interaction: { mode: 'index', intersect: false },
                     scales: {
                         x: {
                             type: 'time',
                             time: {
-                                unit: data.length > 180 ? 'month' : 'week',
+                                unit: data.dates.length > 180 ? 'month' : 'week',
                                 displayFormats: { week: 'MMM d', month: 'MMM yyyy' },
                                 tooltipFormat: 'MMM d, yyyy',
                             },
                             grid: { display: false },
-                            ticks: { color: '#9ca3af', font: { size: 11 } },
+                            ticks: { color: '#52514e', font: { size: 11 } },
                         },
                         y: {
-                            type: 'linear',
-                            position: 'left',
+                            stacked: true,
+                            beginAtZero: true,
                             title: {
                                 display: true,
-                                text: 'Claude Commits',
-                                color: '#2563eb',
+                                text: 'Commits per day',
+                                color: '#52514e',
                                 font: { size: 12, weight: '600' },
                             },
                             ticks: {
                                 callback: v => (v / 1000).toFixed(0) + 'K',
-                                color: '#2563eb',
+                                color: '#52514e',
                                 font: { size: 11 },
                             },
                             grid: { color: 'rgba(0,0,0,0.04)' },
-                            beginAtZero: true,
                         },
-                        y1: {
-                            type: 'linear',
-                            position: 'right',
-                            title: {
-                                display: true,
-                                text: 'Adoption Rate',
-                                color: '#ea580c',
-                                font: { size: 12, weight: '600' },
-                            },
-                            ticks: {
-                                callback: v => v.toFixed(1) + '%',
-                                color: '#ea580c',
-                                font: { size: 11 },
-                            },
-                            grid: { display: false },
-                            beginAtZero: false,
-                        }
                     },
                     plugins: {
                         tooltip: {
-                            backgroundColor: 'rgba(0,0,0,0.8)',
+                            backgroundColor: 'rgba(0,0,0,0.85)',
                             titleFont: { size: 12 },
                             bodyFont: { size: 12 },
                             padding: 10,
                             cornerRadius: 6,
+                            itemSort: (a, b) => b.raw - a.raw,
+                            filter: item => item.raw > 0,
                             callbacks: {
-                                label: function(ctx) {
-                                    if (ctx.datasetIndex === 0) {
-                                        return 'Claude Commits: ' + ctx.raw.toLocaleString();
-                                    }
-                                    return 'Adoption Rate: ' + ctx.raw.toFixed(1) + '%';
+                                label: ctx => ' ' + ctx.dataset.label + ': ' + ctx.raw.toLocaleString(),
+                                footer: items => {
+                                    const total = items[0].chart.data.datasets
+                                        .reduce((s, ds) => s + ds.data[items[0].dataIndex], 0);
+                                    return 'Total: ' + total.toLocaleString();
                                 },
-                                afterBody: function(ctx) {
-                                    const d = data[ctx[0].dataIndex];
-                                    const lines = ['Total Commits: ' + d.total.toLocaleString()];
-                                    const model = getModelForDate(d.date);
-                                    if (model) lines.push('Model: ' + model);
-                                    return lines;
-                                }
-                            }
+                            },
                         },
                         legend: {
                             position: 'top',
                             align: 'end',
                             labels: {
                                 usePointStyle: true,
-                                pointStyle: 'line',
-                                padding: 16,
+                                pointStyle: 'rect',
+                                boxWidth: 8,
+                                boxHeight: 8,
+                                padding: 12,
+                                color: '#52514e',
                                 font: { size: 12 },
-                            }
-                        }
-                    }
-                }
+                            },
+                        },
+                    },
+                },
             });
         }
 
+        function renderTable({ byDate, dates }) {
+            const shown = [...MODEL_SLOTS, OTHER]
+                .filter(([name]) => dates.slice(-14).some(d => (byDate.get(d)[name] || 0) > 0));
+
+            document.getElementById('table-head').innerHTML =
+                '<th scope="col">Date</th>' +
+                shown.map(([name, color]) =>
+                    `<th scope="col"><span class="swatch" style="background:${color}"></span>${name}</th>`
+                ).join('') +
+                '<th scope="col">Total</th>';
+
+            document.getElementById('table-body').innerHTML = dates.slice(-14).reverse().map(d => {
+                const row = byDate.get(d);
+                const total = shown.reduce((s, [name]) => s + (row[name] || 0), 0);
+                return '<tr><th scope="row">' + d + '</th>' +
+                    shown.map(([name]) => '<td>' + (row[name] || 0).toLocaleString() + '</td>').join('') +
+                    '<td>' + total.toLocaleString() + '</td></tr>';
+            }).join('');
+        }
+
+        document.getElementById('fullscreen-btn').addEventListener('click', () => {
+            const el = document.getElementById('chart-section');
+            if (!document.fullscreenElement) {
+                const p = el.requestFullscreen ? el.requestFullscreen()
+                    : el.webkitRequestFullscreen ? el.webkitRequestFullscreen() : Promise.resolve();
+                Promise.resolve(p).then(() => {
+                    try { screen.orientation.lock('landscape'); } catch (e) {}
+                });
+            } else {
+                document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen();
+            }
+        });
+
+        document.getElementById('table-btn').addEventListener('click', (e) => {
+            const shown = document.getElementById('table-wrap').hidden;
+            document.getElementById('table-wrap').hidden = !shown;
+            e.currentTarget.setAttribute('aria-pressed', String(shown));
+        });
+
         document.addEventListener('DOMContentLoaded', () => {
-            Promise.all([loadReleases(), loadData()])
-                .then(([, data]) => { renderStats(data); renderChart(data); })
-                .catch(() => {
+            loadData()
+                .then(data => { renderStats(data); renderChart(data); renderTable(data); })
+                .catch(err => {
+                    console.error(err);
                     document.getElementById('loading').textContent = 'Error loading data.';
                 });
         });
