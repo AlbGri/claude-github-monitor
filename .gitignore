@@ -28,5 +28,10 @@ Desktop.ini
 # Project prompt (not for public repo)
 REGOLE_AI_claude-github-monitor.md
 
+# Local working files (not for public repo)
+_local/
+CLAUDE.md
+STATO_PROGETTO.md
+
 # Claude Code
 .claude/
