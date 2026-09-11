@@ -34,7 +34,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git diff --quiet data/ || (
-            git add data/claude_commits_daily.csv
+            git add data/claude_commits_daily.csv data/claude_commits_by_model.csv
             git commit -m "data: update $(date -u +%Y-%m-%d)"
             git push
           )

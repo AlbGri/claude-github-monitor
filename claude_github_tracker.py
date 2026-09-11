@@ -3,36 +3,41 @@
 Claude Code GitHub Tracker
 --------------------------
 Traccia l'adozione di Claude Code su GitHub analizzando i commit pubblici
-che contengono pattern Anthropic/Claude.
+che contengono il trailer Co-Authored-By di Anthropic.
 
 Usa la GitHub Search API (commits endpoint).
 
 Requisiti:
-  - Python 3.8+
+  - Python 3.10+
   - pip install requests
   - Un GitHub Personal Access Token (gratuito) impostato come variabile d'ambiente:
     export GITHUB_TOKEN="ghp_tuotoken"
 
 Uso:
   # Singolo giorno
-  python claude_github_tracker.py --date 2026-02-10
+  python claude_github_tracker.py --date 2026-09-05
 
   # Range di date
-  python claude_github_tracker.py --from 2026-01-01 --to 2026-02-15
+  python claude_github_tracker.py --from 2026-01-01 --to 2026-09-10
 
-  # Ultima settimana (default se nessun parametro)
-  python claude_github_tracker.py
+  # Ultimi 30 giorni mancanti (default)
+  python claude_github_tracker.py --skip-existing
 
-Output CSV (data/claude_commits_daily.csv):
-  date, co_authored, generated, total_commits
+  # Backfill della sola serie per modello, piu' veloce
+  python claude_github_tracker.py --from 2025-12-15 --to 2026-09-10 --models-only --rate 20
+
+Output:
+  data/claude_commits_daily.csv     date, co_authored
+  data/claude_commits_by_model.csv  date, model, commits (formato lungo)
 
 Note:
-  - co_authored e generated sono i conteggi separati per ciascuna query.
-  - I due pattern possono avere sovrapposizione (uno stesso commit puo'
-    matchare entrambi). Usare max() per la stima conservativa, somma per
-    l'upper bound.
-  - total_commits e' il numero totale di commit pubblici su GitHub per quel giorno
-    (denominatore per calcolare la percentuale di adozione).
+  - Dal 2026-01-08 il trailer nomina il modello ("Co-Authored-By: Claude Opus 5 <...>").
+    Le query per modello sono configurate in data/model_queries.csv.
+  - La copertura (somma per modello / co_authored) e' il presidio contro l'obsolescenza
+    di quel file: se scende sotto il 95% probabilmente e' uscito un modello nuovo.
+  - Il denominatore "tutti i commit pubblici" e' stato rimosso: la Search API non lo
+    misura, per una query senza termini restituisce una stima dell'indice che varia
+    di un fattore 5 per la stessa data. Lo storico resta in git.
 """
 
 import os
@@ -41,6 +46,7 @@ import csv
 import logging
 import time
 import argparse
+import statistics
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -64,23 +70,29 @@ GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 API_BASE = "https://api.github.com"
 SEARCH_COMMITS_URL = f"{API_BASE}/search/commits"
 
-# Pattern di ricerca per identificare commit di Claude Code
 QUERY_CO_AUTHORED = '"Co-authored-by" "anthropic.com"'
-QUERY_GENERATED = '"Generated with Claude Code"'
 
-# File di output
 OUTPUT_DIR = Path("data")
 OUTPUT_CSV = OUTPUT_DIR / "claude_commits_daily.csv"
-CSV_FIELDS = ["date", "co_authored", "generated", "total_commits"]
+MODEL_CSV = OUTPUT_DIR / "claude_commits_by_model.csv"
+MODEL_QUERIES_CSV = OUTPUT_DIR / "model_queries.csv"
 
-# Rate limiting
-REQUESTS_PER_MINUTE = 10  # conservativo (limite reale: 30 per autenticati)
-REQUEST_DELAY = 60 / REQUESTS_PER_MINUTE
+CSV_FIELDS = ["date", "co_authored"]
+MODEL_CSV_FIELDS = ["date", "model", "commits"]
+
+# Limite reale della Search API autenticata: 30 req/min.
+DEFAULT_REQUESTS_PER_MINUTE = 10
+
+# Soglie di allarme
+MIN_MODEL_COVERAGE = 0.95
+MAX_MODEL_COVERAGE = 1.05
+MAX_DEVIATION = 0.5
+MAX_403_RETRIES = 3
 
 
-# --- Funzioni ---
+# --- API ---
 
-def get_headers():
+def get_headers() -> dict[str, str]:
     """Costruisce gli header per le richieste all'API GitHub."""
     headers = {
         "Accept": "application/vnd.github.cloak-preview+json",
@@ -91,101 +103,185 @@ def get_headers():
     return headers
 
 
-def get_commit_count(date_str, query=""):
-    """
-    Interroga l'API per il total_count di commit che matchano la query per una data.
+def get_commit_count(date_str: str, query: str) -> int | None:
+    """Interroga l'API per il total_count di commit che matchano la query per una data.
 
-    Usa una singola richiesta con per_page=1 per leggere solo total_count,
-    senza scaricare i dettagli degli item.
-    """
-    q = f"{query} committer-date:{date_str}" if query else f"committer-date:{date_str}"
-    params = {"q": q, "per_page": 1}
+    Usa una singola richiesta con per_page=1 per leggere solo total_count, senza
+    scaricare i dettagli degli item.
 
-    try:
-        response = requests.get(
-            SEARCH_COMMITS_URL,
-            headers=get_headers(),
-            params=params,
-        )
+    Args:
+        date_str: Data in formato YYYY-MM-DD.
+        query: Termini di ricerca gia' quotati, senza il qualificatore di data.
+
+    Returns:
+        Il numero di commit, che puo' essere legittimamente 0, oppure None se la
+        richiesta e' fallita. Distinguere i due casi e' essenziale: un errore
+        silenziosamente convertito in 0 ha tenuto nascosta per otto mesi la morte
+        del pattern "Generated with Claude Code".
+    """
+    params = {"q": f"{query} committer-date:{date_str}", "per_page": 1}
+
+    for attempt in range(MAX_403_RETRIES):
+        try:
+            response = requests.get(SEARCH_COMMITS_URL, headers=get_headers(), params=params)
+        except Exception as e:
+            log.error("Errore di rete per %s (%s): %s", date_str, query, e)
+            return None
+
+        if response.status_code == 200:
+            return response.json().get("total_count", 0)
 
         if response.status_code == 403:
             reset_time = int(response.headers.get("X-RateLimit-Reset", 0))
             wait = max(reset_time - int(time.time()), 10)
-            log.warning("Rate limit raggiunto, attendo %ds...", wait)
+            log.warning(
+                "Rate limit raggiunto (tentativo %d/%d), attendo %ds...",
+                attempt + 1, MAX_403_RETRIES, wait,
+            )
             time.sleep(wait)
-            return get_commit_count(date_str, query)
+            continue
 
-        if response.status_code == 200:
-            count = response.json().get("total_count", 0)
-            return count
+        log.error(
+            "Query fallita per %s (HTTP %d): %s",
+            date_str, response.status_code, params["q"],
+        )
+        return None
 
-        log.warning("Query failed for %s (HTTP %d): %s", date_str, response.status_code, q)
-    except Exception as e:
-        log.error("Error querying %s: %s", date_str, e)
-
-    return 0
+    log.error("Rate limit non rientrato dopo %d tentativi per %s", MAX_403_RETRIES, date_str)
+    return None
 
 
-def collect_day_data(date_str):
+# --- Configurazione modelli ---
+
+def load_model_queries() -> list[tuple[str, str]]:
+    """Carica le query per modello da data/model_queries.csv.
+
+    Le frasi devono sempre includere il numero di versione completo con il decimale.
+    La ricerca GitHub spezza "4.8" in token, quindi la frase "Co-Authored-By: Claude
+    Opus 4" matcha anche 4.6, 4.7 e 4.8: misurato il 2026-09-05, 40.010 contro i
+    39.774 della somma delle tre varianti. Una frase senza decimale gonfia la
+    copertura sopra il 100% e falsa la serie.
+
+    Returns:
+        Lista di coppie (nome modello, frase di ricerca senza virgolette).
     """
-    Raccoglie dati per un singolo giorno.
+    if not MODEL_QUERIES_CSV.exists():
+        log.error("File mancante: %s", MODEL_QUERIES_CSV)
+        return []
 
-    Registra separatamente il conteggio per ciascun pattern di ricerca,
-    poi recupera il totale di tutti i commit pubblici come denominatore.
+    with open(MODEL_QUERIES_CSV, "r", encoding="utf-8") as f:
+        return [(row["model"], row["phrase"]) for row in csv.DictReader(f)]
+
+
+# --- Raccolta ---
+
+def collect_model_data(
+    date_str: str, model_queries: list[tuple[str, str]], delay: float
+) -> dict[str, int]:
+    """Raccoglie i conteggi per modello di un singolo giorno.
+
+    Un modello che fallisce non blocca il giorno: viene saltato e segnalato. I modelli
+    con zero commit non entrano nel risultato, per tenere compatto il CSV.
     """
-    log.info("Cerco: co_authored per %s...", date_str)
-    co_authored = get_commit_count(date_str, QUERY_CO_AUTHORED)
-    log.info("  -> %d commit", co_authored)
-    time.sleep(REQUEST_DELAY)
+    counts = {}
 
-    log.info("Cerco: generated per %s...", date_str)
-    generated = get_commit_count(date_str, QUERY_GENERATED)
-    log.info("  -> %d commit", generated)
-    time.sleep(REQUEST_DELAY)
+    for i, (model, phrase) in enumerate(model_queries):
+        count = get_commit_count(date_str, f'"{phrase}"')
+        if count is None:
+            log.warning("  %s: query fallita, modello saltato", model)
+        elif count > 0:
+            counts[model] = count
 
-    log.info("Recupero total commits per %s...", date_str)
-    total_commits = get_commit_count(date_str)
-    log.info("  Total commits on %s: %d", date_str, total_commits)
+        if i < len(model_queries) - 1:
+            time.sleep(delay)
 
-    return {
-        "date": date_str,
-        "co_authored": co_authored,
-        "generated": generated,
-        "total_commits": total_commits,
-    }
+    return counts
 
 
-def load_existing_data():
-    """Carica dati esistenti dal CSV per preservarli tra le esecuzioni."""
+def check_deviation(history: dict[str, int], date_str: str, value: int) -> None:
+    """Segnala uno scostamento anomalo rispetto alla mediana dei 7 giorni precedenti.
+
+    Il dato viene comunque scritto: uno scostamento puo' essere crescita vera. Serve
+    solo a rendere visibile nel log un eventuale cambio di pattern.
+    """
+    previous = [history[d] for d in sorted(history) if d < date_str][-7:]
+    if len(previous) < 7:
+        return
+
+    median = statistics.median(previous)
+    if median > 0 and abs(value - median) / median > MAX_DEVIATION:
+        log.warning(
+            "  %s: scostamento %.0f%% dalla mediana 7gg (%d vs %d)",
+            date_str, (value - median) / median * 100, value, median,
+        )
+
+
+# --- Persistenza ---
+
+def load_existing_data() -> dict[str, int]:
+    """Carica il CSV principale. Tollera colonne extra da checkout con schema vecchio."""
     existing = {}
 
     if OUTPUT_CSV.exists():
         with open(OUTPUT_CSV, "r", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                existing[row["date"]] = {
-                    "date": row["date"],
-                    "co_authored": int(row["co_authored"]),
-                    "generated": int(row["generated"]),
-                    "total_commits": int(row["total_commits"]),
-                }
+            for row in csv.DictReader(f):
+                try:
+                    existing[row["date"]] = int(row["co_authored"])
+                except (KeyError, TypeError, ValueError):
+                    log.warning("Riga non valida nel CSV principale, ignorata: %s", row)
 
     return existing
 
 
-def save_daily_data(all_data):
-    """Salva i dati giornalieri nel CSV."""
+def load_existing_models() -> dict[str, dict[str, int]]:
+    """Carica il CSV per modello in una mappa data -> {modello: commit}."""
+    existing: dict[str, dict[str, int]] = {}
+
+    if MODEL_CSV.exists():
+        with open(MODEL_CSV, "r", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                try:
+                    existing.setdefault(row["date"], {})[row["model"]] = int(row["commits"])
+                except (KeyError, TypeError, ValueError):
+                    log.warning("Riga non valida nel CSV per modello, ignorata: %s", row)
+
+    return existing
+
+
+def save_daily_data(all_data: dict[str, int]) -> None:
+    """Salva il CSV principale, ordinato per data."""
     OUTPUT_DIR.mkdir(exist_ok=True)
 
     with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
+        writer = csv.DictWriter(f, fieldnames=CSV_FIELDS, lineterminator="\n")
         writer.writeheader()
-        for day in sorted(all_data, key=lambda x: x["date"]):
-            writer.writerow({k: day[k] for k in CSV_FIELDS})
+        for date_str in sorted(all_data):
+            writer.writerow({"date": date_str, "co_authored": all_data[date_str]})
 
 
-def generate_date_range(from_date, to_date):
-    """Genera lista di date tra from_date e to_date."""
+def save_model_data(all_models: dict[str, dict[str, int]]) -> None:
+    """Salva il CSV per modello in formato lungo, ordinato per data e nome modello.
+
+    L'ordinamento per nome e non per volume tiene stabili i diff in git.
+    """
+    OUTPUT_DIR.mkdir(exist_ok=True)
+
+    with open(MODEL_CSV, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=MODEL_CSV_FIELDS, lineterminator="\n")
+        writer.writeheader()
+        for date_str in sorted(all_models):
+            for model in sorted(all_models[date_str]):
+                writer.writerow({
+                    "date": date_str,
+                    "model": model,
+                    "commits": all_models[date_str][model],
+                })
+
+
+# --- Output ---
+
+def generate_date_range(from_date: datetime, to_date: datetime) -> list[str]:
+    """Genera la lista di date tra from_date e to_date, estremi inclusi."""
     dates = []
     current = from_date
     while current <= to_date:
@@ -194,47 +290,40 @@ def generate_date_range(from_date, to_date):
     return dates
 
 
-def print_summary(all_data):
-    """Stampa un riepilogo dei dati raccolti."""
-    print("\n" + "=" * 80)
+def print_summary(processed: list[str], all_data: dict[str, int],
+                  all_models: dict[str, dict[str, int]]) -> None:
+    """Stampa un riepilogo dei giorni processati in questa esecuzione."""
+    print("\n" + "=" * 78)
     print("RIEPILOGO")
-    print("=" * 80)
-    print(f"{'Data':<14} {'Co-Authored':>12} {'Generated':>10} {'Total':>15} {'%max':>8}")
-    print("-" * 80)
-    for day in sorted(all_data, key=lambda x: x["date"]):
-        pct = ""
-        claude = max(day["co_authored"], day["generated"])
-        if day["total_commits"] > 0:
-            pct = f"{claude / day['total_commits'] * 100:.2f}%"
-        print(
-            f"{day['date']:<14} {day['co_authored']:>12,} {day['generated']:>10,}"
-            f" {day['total_commits']:>15,} {pct:>8}"
-        )
-    print("-" * 80)
+    print("=" * 78)
+    print(f"{'Data':<12} {'Co-Authored':>13} {'Copertura':>10}  {'Modello prevalente':<22}")
+    print("-" * 78)
 
-    if all_data:
-        tot_co = sum(d["co_authored"] for d in all_data)
-        tot_gen = sum(d["generated"] for d in all_data)
-        tot_all = sum(d["total_commits"] for d in all_data)
-        tot_max = sum(max(d["co_authored"], d["generated"]) for d in all_data)
-        pct = f"{tot_max / tot_all * 100:.2f}%" if tot_all > 0 else ""
-        print(
-            f"{'TOTALE':<14} {tot_co:>12,} {tot_gen:>10,}"
-            f" {tot_all:>15,} {pct:>8}"
-        )
+    for date_str in sorted(processed):
+        co = all_data.get(date_str, 0)
+        models = all_models.get(date_str, {})
+        coverage = f"{sum(models.values()) / co * 100:.1f}%" if co and models else "-"
+        top = max(models, key=models.get) if models else "-"
+        print(f"{date_str:<12} {co:>13,} {coverage:>10}  {top:<22}")
 
-    print(f"\nDati salvati in: {OUTPUT_CSV}")
+    print("-" * 78)
+    print(f"Giorni processati: {len(processed)}")
+    print(f"Dati salvati in: {OUTPUT_CSV} e {MODEL_CSV}")
 
 
 # --- Main ---
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Traccia l'adozione di Claude Code su GitHub")
     parser.add_argument("--date", help="Singola data (YYYY-MM-DD)")
     parser.add_argument("--from", dest="from_date", help="Data inizio range (YYYY-MM-DD)")
     parser.add_argument("--to", dest="to_date", help="Data fine range (YYYY-MM-DD)")
     parser.add_argument("--skip-existing", action="store_true",
-                        help="Salta date gia' presenti nel CSV")
+                        help="Salta date gia' presenti")
+    parser.add_argument("--models-only", action="store_true",
+                        help="Raccoglie solo la serie per modello, per date gia' nel CSV")
+    parser.add_argument("--rate", type=int, default=DEFAULT_REQUESTS_PER_MINUTE,
+                        help=f"Richieste al minuto (default {DEFAULT_REQUESTS_PER_MINUTE}, max 30)")
     args = parser.parse_args()
 
     if not GITHUB_TOKEN:
@@ -242,7 +331,13 @@ def main():
         log.warning("Senza token il rate limit e' molto basso (10 req/min).")
         log.warning("Crea un token su https://github.com/settings/tokens")
 
-    # Determina il range di date
+    delay = 60 / max(1, min(args.rate, 30))
+
+    model_queries = load_model_queries()
+    if not model_queries:
+        log.error("Nessuna query per modello configurata, impossibile procedere.")
+        sys.exit(1)
+
     if args.date:
         dates = [args.date]
     elif args.from_date:
@@ -250,14 +345,22 @@ def main():
         to_dt = datetime.strptime(args.to_date, "%Y-%m-%d") if args.to_date else datetime.now()
         dates = generate_date_range(from_dt, to_dt)
     else:
+        # Finestra larga: con --skip-existing costa un giorno solo, ma permette di
+        # recuperare da un'interruzione del workflow fino a 30 giorni.
         to_dt = datetime.now() - timedelta(days=1)  # ieri, per evitare dati parziali
-        from_dt = to_dt - timedelta(days=7)
+        from_dt = to_dt - timedelta(days=30)
         dates = generate_date_range(from_dt, to_dt)
 
-    # Carica dati esistenti e merge con i nuovi
-    existing = load_existing_data()
+    all_data = load_existing_data()
+    all_models = load_existing_models()
+
     if args.skip_existing:
-        dates = [d for d in dates if d not in existing]
+        # Una data e' "fatta" solo se ha entrambe le serie: altrimenti riprendere un
+        # backfill interrotto salterebbe i giorni a cui manca la parte per modello.
+        if args.models_only:
+            dates = [d for d in dates if d not in all_models]
+        else:
+            dates = [d for d in dates if d not in all_data or d not in all_models]
 
     if not dates:
         log.info("Nessuna data da processare.")
@@ -265,31 +368,64 @@ def main():
 
     log.info("Claude Code GitHub Tracker")
     log.info("Date da analizzare: %s -> %s (%d giorni)", dates[0], dates[-1], len(dates))
+    log.info("Modelli configurati: %d | %d req/min", len(model_queries), args.rate)
     log.info("Token GitHub: %s", "configurato" if GITHUB_TOKEN else "MANCANTE")
 
-    # Parti dai dati esistenti, i nuovi verranno aggiunti/aggiornati
-    all_data = dict(existing)
-    new_data = []
+    processed = []
 
     for i, date_str in enumerate(dates):
         log.info("[%d/%d] Analisi %s...", i + 1, len(dates), date_str)
         try:
-            day_data = collect_day_data(date_str)
-            if day_data["total_commits"] == 0:
-                log.warning("Dati non validi per %s (total_commits=0), skip.", date_str)
-                continue
-            all_data[date_str] = day_data
-            new_data.append(day_data)
-        except Exception as e:
-            log.error("Errore per %s: %s, skip.", date_str, e)
+            if args.models_only:
+                co_authored = all_data.get(date_str)
+                if co_authored is None:
+                    raise RuntimeError("data non presente nel CSV principale")
+            else:
+                co_authored = get_commit_count(date_str, QUERY_CO_AUTHORED)
+                if co_authored is None:
+                    raise RuntimeError("query co_authored fallita")
+                if co_authored == 0:
+                    raise RuntimeError("co_authored=0: token scaduto o pattern non piu' valido")
+                log.info("  co_authored: %d", co_authored)
+                check_deviation(all_data, date_str, co_authored)
+                all_data[date_str] = co_authored
+                time.sleep(delay)
 
-        # Salva progressivamente (tutti i dati: esistenti + nuovi)
-        save_daily_data(list(all_data.values()))
+            models = collect_model_data(date_str, model_queries, delay)
+            if not models:
+                raise RuntimeError("nessun conteggio per modello raccolto")
+
+            all_models[date_str] = models
+            coverage = sum(models.values()) / co_authored
+            if coverage < MIN_MODEL_COVERAGE:
+                log.warning(
+                    "  copertura per modello %.1f%%: probabile modello non in %s",
+                    coverage * 100, MODEL_QUERIES_CSV,
+                )
+            elif coverage > MAX_MODEL_COVERAGE:
+                log.warning(
+                    "  copertura per modello %.1f%%: probabile collisione di prefisso in %s",
+                    coverage * 100, MODEL_QUERIES_CSV,
+                )
+            else:
+                log.info("  copertura per modello: %.1f%%", coverage * 100)
+
+            processed.append(date_str)
+        except Exception as e:
+            log.error("Errore per %s: %s, giorno saltato.", date_str, e)
+
+        # Salvataggio progressivo: rende il backfill interrompibile e riprendibile.
+        save_daily_data(all_data)
+        save_model_data(all_models)
 
         if i < len(dates) - 1:
-            time.sleep(REQUEST_DELAY)
+            time.sleep(delay)
 
-    print_summary(new_data)
+    if not processed:
+        log.error("Nessun giorno scritto su %d richiesti.", len(dates))
+        sys.exit(1)
+
+    print_summary(processed, all_data, all_models)
 
 
 if __name__ == "__main__":
