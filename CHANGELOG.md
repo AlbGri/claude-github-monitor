@@ -2,6 +2,27 @@
 
 Notable changes to this project. Dates are the day the change went live.
 
+## 1.1.0 -- 2026-09-12
+
+### Added
+
+- **Time range selector.** `30d` / `90d` / `All` above the chart, defaulting to the
+  whole series. Nine months on a single view left no way to read a recent month.
+  The range scopes the chart and the Other panel; the stat cards and the table
+  state their own window in the label and stay on the latest day.
+- **A 7-day moving average of the daily total**, drawn over the stack in neutral
+  ink. It sits in its own stack group so a stacked axis leaves it at its own value,
+  and carries a surface-coloured halo so it stays readable where it crosses the
+  fills. The average existed only in the KPI cards until now, and the daily series
+  has a weekend cycle that hides the trend.
+
+### Changed
+
+- **Other moved to the base of the stack.** It holds `Unnamed`, the oldest trailer
+  form, so the stack still reads oldest to newest, and its dark neutral no longer
+  competes with the average line along the top edge. The table columns follow the
+  same order.
+
 ## 1.0.0 -- 2026-09-12
 
 The measurement was reworked after a review found the published dashboard was
