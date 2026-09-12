@@ -36,6 +36,13 @@ Notable changes to this project. Dates are the day the change went live.
   old error handling that returned `0` on a failed request. They read 9 and 11
   commits. No other zero remains in the series.
 - `--models-only` divided by a zero total instead of reporting it.
+- **The 2025 series was re-read against one reading of the index.** Its total had
+  been collected in February 2026 and `Unnamed` in September, months apart, which
+  left twelve days counting more model commits than total commits -- 212% on
+  2025-04-27. Both series now come from the same pass: the revision is -2.9% at the
+  median over 294 days, no day is above 105% coverage any more, and one sits below
+  90%. The opening days also lost a row of identical `1`s that the first collection
+  had produced: 2025-02-01 reads 5 commits, 2025-02-03 reads 16.
 
 ## 1.1.0 -- 2026-09-12
 
