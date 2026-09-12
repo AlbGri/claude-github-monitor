@@ -94,7 +94,7 @@ The trailer began naming the model on **2025-12-06**, and the change rolled out 
 
 ## Automation
 
-A GitHub Action (`.github/workflows/daily-track.yml`) runs the tracker automatically every day at 06:00 UTC. It:
+A GitHub Action (`.github/workflows/daily-track.yml`) runs the tracker automatically once a day. It asks for 06:00 UTC and in practice starts between 10:56 and 12:03 UTC, since GitHub queues scheduled jobs and round hours are the most contended; the tracker collects the previous day, so the delay costs nothing. It:
 
 1. Checks out the repository
 2. Installs Python and dependencies

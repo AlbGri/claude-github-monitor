@@ -2,7 +2,10 @@ name: Daily Claude Code Tracker
 
 on:
   schedule:
-    - cron: "0 6 * * *" # Every day at 06:00 UTC
+    # Asks for 06:00 UTC, actually runs between 10:56 and 12:03 UTC: GitHub queues
+    # scheduled jobs and the round hours are the most contended. The tracker always
+    # collects yesterday, so the delay costs nothing.
+    - cron: "0 6 * * *"
   workflow_dispatch: # Manual trigger
 
 permissions:
