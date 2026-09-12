@@ -340,6 +340,9 @@ def main() -> None:
                         help="Salta date gia' presenti")
     parser.add_argument("--models-only", action="store_true",
                         help="Raccoglie solo la serie per modello, per date gia' nel CSV")
+    parser.add_argument("--only-model", metavar="NOME",
+                        help="Limita la raccolta a un solo modello, lasciando intatti "
+                             "gli altri conteggi gia' presenti per quelle date")
     parser.add_argument("--rate", type=int, default=DEFAULT_REQUESTS_PER_MINUTE,
                         help=f"Richieste al minuto (default {DEFAULT_REQUESTS_PER_MINUTE}, max 30)")
     args = parser.parse_args()
@@ -355,6 +358,12 @@ def main() -> None:
     if not model_queries:
         log.error("Nessuna query per modello configurata, impossibile procedere.")
         sys.exit(1)
+
+    if args.only_model:
+        model_queries = [q for q in model_queries if q[0] == args.only_model]
+        if not model_queries:
+            log.error("Modello '%s' non presente in %s", args.only_model, MODEL_QUERIES_CSV)
+            sys.exit(1)
 
     if args.date:
         dates = [args.date]
@@ -398,6 +407,8 @@ def main() -> None:
                 co_authored = all_data.get(date_str)
                 if co_authored is None:
                     raise RuntimeError("data non presente nel CSV principale")
+                if co_authored == 0:
+                    raise RuntimeError("co_authored=0 nel CSV: rileggere il giorno senza --models-only")
             else:
                 co_authored = get_commit_count(date_str, QUERY_CO_AUTHORED)
                 if co_authored is None:
@@ -415,8 +426,20 @@ def main() -> None:
             if not models:
                 raise RuntimeError("nessun conteggio per modello raccolto")
 
-            all_models[date_str] = models
-            coverage = sum(models.values()) / co_authored
+            if args.only_model:
+                # Aggiorna le sole chiavi richieste: gli altri modelli del giorno non
+                # sono stati interrogati e sovrascrivere il giorno li cancellerebbe.
+                day = all_models.setdefault(date_str, {})
+                for model, _ in model_queries:
+                    if model in models:
+                        day[model] = models[model]
+                    else:
+                        day.pop(model, None)
+            else:
+                all_models[date_str] = models
+                day = models
+
+            coverage = sum(day.values()) / co_authored
             if coverage < MIN_MODEL_COVERAGE:
                 log.warning(
                     "  copertura per modello %.1f%%: probabile modello non in %s",
