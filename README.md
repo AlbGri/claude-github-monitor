@@ -75,7 +75,10 @@ python claude_github_tracker.py --from 2026-01-01 --to 2026-09-10
 python claude_github_tracker.py --skip-existing
 
 # Backfill only the per-model series, faster
-python claude_github_tracker.py --from 2025-12-15 --to 2026-09-10 --models-only --rate 25
+python claude_github_tracker.py --from 2025-12-06 --to 2026-09-10 --models-only --rate 25
+
+# Backfill a single model, leaving the other counts for those days untouched
+python claude_github_tracker.py --from 2026-01-01 --to 2026-09-10 --models-only --only-model "Opus 5" --rate 25
 ```
 
 Two CSVs are produced:
@@ -85,7 +88,7 @@ Two CSVs are produced:
 | `data/claude_commits_daily.csv` | `date`, `co_authored` |
 | `data/claude_commits_by_model.csv` | `date`, `model`, `commits` (long format; zero rows omitted) |
 
-The per-model series starts on 2025-12-15. Before that the trailer did not name the model: on 2025-08-01 the unnamed form accounted for 18,448 commits out of 18,464.
+The trailer began naming the model on **2025-12-06**, and the change rolled out over about a week: the unnamed form covered 95% of the day's commits on 5 December, 61% on the 6th and 21% by the 12th. Both series therefore run from 2025-02-01, but before December 2025 the breakdown holds a single row, `Unnamed`, which is all the commits recorded at the time.
 
 `data/model_queries.csv` holds the search phrase for each model and is the one file to update when a new model ships.
 

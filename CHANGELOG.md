@@ -20,6 +20,22 @@ Notable changes to this project. Dates are the day the change went live.
   what was measurable then.
 - The tooltip total comes from the measured `co_authored` rather than the sum of
   the stack, which is zero before the breakdown exists and ~0.4% short after it.
+- **The breakdown now covers the whole series.** `Unnamed` was measured back to
+  2025-02-01, so the stack no longer stops where the model names begin and the
+  average line always has its series underneath.
+
+### Fixed
+
+- **The trailer started naming the model on 2025-12-06, not 2025-12-15.** The
+  earlier date was chosen when the backfill was planned, not measured. The rollout
+  took about a week -- the unnamed form covered 95% of commits on 5 December, 61%
+  on the 6th, 21% by the 12th -- and the nine days in between were recorded as
+  unnamed although the names were already there. They now carry a breakdown, 93-97%
+  covered, with Opus 4.5 leading from 8 December.
+- **Two days of 2025 held a false zero**, 2025-02-13 and 2025-02-22, written by the
+  old error handling that returned `0` on a failed request. They read 9 and 11
+  commits. No other zero remains in the series.
+- `--models-only` divided by a zero total instead of reporting it.
 
 ## 1.1.0 -- 2026-09-12
 
