@@ -2,6 +2,25 @@
 
 Notable changes to this project. Dates are the day the change went live.
 
+## 1.2.0 -- 2026-09-12
+
+### Added
+
+- **A YTD range**, now the view the page opens on: the current year, which is where
+  the readable detail is.
+
+### Changed
+
+- **The chart timeline follows the total, not the breakdown.** It was built from
+  `data/claude_commits_by_model.csv`, which starts on 2025-12-15 because that is
+  when the trailer began naming the model, so ten months of recorded history --
+  2025-02-01 onward, from 76 commits a day in February to 50,340 in December --
+  never reached the page. `All` now covers the whole series: before 2025-12-15 the
+  average line runs alone, with no stack under it, which is an honest picture of
+  what was measurable then.
+- The tooltip total comes from the measured `co_authored` rather than the sum of
+  the stack, which is zero before the breakdown exists and ~0.4% short after it.
+
 ## 1.1.0 -- 2026-09-12
 
 ### Added

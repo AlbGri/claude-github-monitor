@@ -261,9 +261,10 @@
         </section>
 
         <div class="controls" role="group" aria-label="Time range">
-            <button class="tool-btn range-btn" data-days="30" aria-pressed="false">30d</button>
-            <button class="tool-btn range-btn" data-days="90" aria-pressed="false">90d</button>
-            <button class="tool-btn range-btn" data-days="0" aria-pressed="true">All</button>
+            <button class="tool-btn range-btn" data-range="30" aria-pressed="false">30d</button>
+            <button class="tool-btn range-btn" data-range="90" aria-pressed="false">90d</button>
+            <button class="tool-btn range-btn" data-range="ytd" aria-pressed="true">YTD</button>
+            <button class="tool-btn range-btn" data-range="all" aria-pressed="false">All</button>
         </div>
 
         <main id="chart-section" class="chart-container" tabindex="-1">
@@ -328,8 +329,8 @@
         const INK = '#1a1a1a';
 
         let chart = null;
-        let dataset = null;   // everything loaded, unsliced
-        let viewDays = 0;     // 0 = whole series
+        let dataset = null;       // everything loaded, unsliced
+        let viewRange = 'ytd';    // '30' | '90' | 'ytd' | 'all'
 
         async function fetchCsv(url) {
             const resp = await fetch(url);
@@ -373,7 +374,10 @@
                 }
             });
 
-            const dates = [...byDate.keys()].sort();
+            // The timeline is the total's, not the breakdown's: the trailer only
+            // started naming the model on 2025-12-15, and the ten months before it
+            // are real usage that the chart would otherwise drop.
+            const dates = [...new Set([...totals.keys(), ...byDate.keys()])].sort();
             return { totals, byDate, otherByDate, dates, ma: movingAverage(totals, dates) };
         }
 
@@ -391,7 +395,14 @@
             return ma;
         }
 
-        const inWindow = ({ dates }) => viewDays ? dates.slice(-viewDays) : dates;
+        function inWindow({ dates }) {
+            if (viewRange === 'all') return dates;
+            if (viewRange === 'ytd') {
+                const start = dates[dates.length - 1].slice(0, 4) + '-01-01';
+                return dates.filter(d => d >= start);
+            }
+            return dates.slice(-Number(viewRange));
+        }
 
         function renderStats({ totals, byDate, dates }) {
             const all = [...totals.keys()].sort();
@@ -415,7 +426,7 @@
             const window7 = dates.slice(-7);
             const sums = {};
             window7.forEach(d => {
-                Object.entries(byDate.get(d)).forEach(([m, n]) => { sums[m] = (sums[m] || 0) + n; });
+                Object.entries(byDate.get(d) || {}).forEach(([m, n]) => { sums[m] = (sums[m] || 0) + n; });
             });
             const entries = Object.entries(sums);
             if (entries.length) {
@@ -430,7 +441,7 @@
             const areas = STACK
                 .map(([name, color]) => ({
                     label: name,
-                    data: dates.map(d => byDate.get(d)[name] || 0),
+                    data: dates.map(d => (byDate.get(d) || {})[name] || 0),
                     borderColor: SURFACE,   // 2px surface gap between stacked fills
                     borderWidth: 1.5,
                     backgroundColor: color,
@@ -535,12 +546,13 @@
                             callbacks: {
                                 label: ctx => ' ' + ctx.dataset.label + ': '
                                     + Math.round(ctx.raw).toLocaleString(),
+                                // The measured total, not the sum of the stack: before
+                                // 2025-12-15 there is no breakdown to add up, and after
+                                // it the queries still leave ~0.4% unaccounted for.
                                 footer: items => {
                                     const i = items[0].dataIndex;
-                                    const total = items[0].chart.data.datasets
-                                        .filter(ds => ds.stack === 'models')
-                                        .reduce((s, ds) => s + ds.data[i], 0);
-                                    return 'Total: ' + total.toLocaleString();
+                                    const total = data.totals.get(items[0].chart.data.labels[i]);
+                                    return total ? 'Total: ' + total.toLocaleString() : '';
                                 },
                             },
                         },
@@ -581,7 +593,7 @@
 
         function renderTable({ byDate, dates }) {
             const shown = STACK
-                .filter(([name]) => dates.slice(-14).some(d => (byDate.get(d)[name] || 0) > 0));
+                .filter(([name]) => dates.slice(-14).some(d => ((byDate.get(d) || {})[name] || 0) > 0));
 
             document.getElementById('table-head').innerHTML =
                 '<th scope="col">Date</th>' +
@@ -591,7 +603,7 @@
                 '<th scope="col">Total</th>';
 
             document.getElementById('table-body').innerHTML = dates.slice(-14).reverse().map(d => {
-                const row = byDate.get(d);
+                const row = byDate.get(d) || {};
                 const total = shown.reduce((s, [name]) => s + (row[name] || 0), 0);
                 return '<tr><th scope="row">' + d + '</th>' +
                     shown.map(([name]) => '<td>' + (row[name] || 0).toLocaleString() + '</td>').join('') +
@@ -602,7 +614,10 @@
         const esc = s => String(s).replace(/[&<>"]/g, c =>
             ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-        function renderOther({ byDate, otherByDate }, dates) {
+        function renderOther({ byDate, otherByDate }, allDates) {
+            // Only the days the breakdown covers: before 2025-12-15 the trailer did
+            // not name the model, so those days have no parts to account for.
+            const dates = allDates.filter(d => byDate.has(d));
             const sums = {};
             dates.forEach(d => Object.entries(otherByDate.get(d) || {})
                 .forEach(([m, n]) => { sums[m] = (sums[m] || 0) + n; }));
@@ -656,8 +671,8 @@
         // The range scopes the chart and the Other panel, which states its own
         // window in prose. The stat cards and the table name theirs in the label
         // ("7d avg", "Last 14 days") and stay anchored to the latest day.
-        function applyRange(days) {
-            viewDays = days;
+        function applyRange(range) {
+            viewRange = range;
             const dates = inWindow(dataset);
             chart.data.labels = dates;
             chart.data.datasets = buildDatasets(dataset, dates);
@@ -670,7 +685,7 @@
             btn.addEventListener('click', () => {
                 document.querySelectorAll('.range-btn')
                     .forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
-                applyRange(Number(btn.dataset.days));
+                applyRange(btn.dataset.range);
             });
         });
 
