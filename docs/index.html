@@ -91,6 +91,12 @@
            name in the legend and table carries identity, the number does not. */
         .stat-value { color: #1a1a1a; }
         .stat-muted { color: #6b7280; }
+        /* Filters live in their own row above the card, not in the chart chrome. */
+        .controls {
+            display: flex;
+            gap: 0.35rem;
+            margin-bottom: 0.6rem;
+        }
         .chart-container {
             position: relative;
             background: #fff;
@@ -254,6 +260,12 @@
             </div>
         </section>
 
+        <div class="controls" role="group" aria-label="Time range">
+            <button class="tool-btn range-btn" data-days="30" aria-pressed="false">30d</button>
+            <button class="tool-btn range-btn" data-days="90" aria-pressed="false">90d</button>
+            <button class="tool-btn range-btn" data-days="0" aria-pressed="true">All</button>
+        </div>
+
         <main id="chart-section" class="chart-container" tabindex="-1">
             <div class="chart-tools">
                 <button class="tool-btn" id="table-btn" aria-pressed="false" title="Toggle data table">Table</button>
@@ -306,11 +318,18 @@
         ];
         // Unnamed, Sonnet 4.5, Sonnet 4 and Haiku 4.5 land here: 5.4% of the whole
         // series, and "commits we cannot attribute to a named model" is what the
-        // bucket means anyway.
+        // bucket means anyway. It sits at the base of the stack: it holds the oldest
+        // trailer form, and a dark neutral at the top would fight the average line.
         const OTHER = ['Other', '#52514e'];
+        const STACK = [OTHER, ...MODEL_SLOTS];   // base to top
         const SLOT_NAMES = MODEL_SLOTS.map(s => s[0]);
+        const MA_WINDOW = 7;
+        const MA_LABEL = MA_WINDOW + '-day average';
+        const INK = '#1a1a1a';
 
         let chart = null;
+        let dataset = null;   // everything loaded, unsliced
+        let viewDays = 0;     // 0 = whole series
 
         async function fetchCsv(url) {
             const resp = await fetch(url);
@@ -355,8 +374,24 @@
             });
 
             const dates = [...byDate.keys()].sort();
-            return { totals, byDate, otherByDate, dates };
+            return { totals, byDate, otherByDate, dates, ma: movingAverage(totals, dates) };
         }
+
+        // Computed over the whole series, so a narrowed window still opens with a
+        // full average instead of seven days of ramp-up. Days whose window is not
+        // complete get no point at all rather than an average of fewer days.
+        function movingAverage(totals, dates) {
+            const ma = new Map();
+            dates.forEach((d, i) => {
+                if (i < MA_WINDOW - 1) return;
+                const w = dates.slice(i - MA_WINDOW + 1, i + 1).map(x => totals.get(x));
+                if (w.some(v => !Number.isFinite(v))) return;
+                ma.set(d, w.reduce((a, b) => a + b, 0) / MA_WINDOW);
+            });
+            return ma;
+        }
+
+        const inWindow = ({ dates }) => viewDays ? dates.slice(-viewDays) : dates;
 
         function renderStats({ totals, byDate, dates }) {
             const all = [...totals.keys()].sort();
@@ -391,9 +426,8 @@
             }
         }
 
-        function buildDatasets({ byDate, dates }) {
-            const slots = [...MODEL_SLOTS, OTHER];
-            return slots
+        function buildDatasets({ byDate, ma }, dates) {
+            const areas = STACK
                 .map(([name, color]) => ({
                     label: name,
                     data: dates.map(d => byDate.get(d)[name] || 0),
@@ -401,21 +435,60 @@
                     borderWidth: 1.5,
                     backgroundColor: color,
                     fill: true,
+                    stack: 'models',
                     pointRadius: 0,
                     pointHoverRadius: 0,
                     tension: 0,
                 }))
                 .filter(ds => ds.data.some(v => v > 0));
+
+            // Its own stack group, so a stacked y axis leaves it at its own value
+            // instead of piling it on top of the areas. Neutral ink, not a ninth
+            // categorical hue: it is the same total the stack already shows, smoothed.
+            // It rides on the top edge of the stack, where Other is also a dark
+            // neutral, so a surface-coloured halo goes underneath to keep it legible.
+            // Chart.js draws datasets last-to-first, so these two go in front of the
+            // areas to end up on top of them: the line first, its halo right behind.
+            const avg = dates.map(d => ma.get(d) ?? null);
+            areas.unshift({
+                label: '', halo: true,
+                data: avg,
+                borderColor: SURFACE,
+                borderWidth: 5,
+                fill: false,
+                stack: 'halo',   // its own group, or it stacks with the line it backs
+                spanGaps: false,
+                pointRadius: 0,
+                pointHoverRadius: 0,
+                tension: 0.2,
+            });
+            areas.unshift({
+                label: MA_LABEL,
+                data: avg,
+                borderColor: INK,
+                borderWidth: 2,
+                backgroundColor: INK,
+                fill: false,
+                stack: 'average',
+                spanGaps: false,
+                pointStyle: 'line',   // legend mirrors the mark: a line, not a fill
+                pointRadius: 0,
+                pointHoverRadius: 0,
+                tension: 0.2,
+            });
+            return areas;
         }
 
-        function renderChart(data) {
+        const timeUnit = n => n > 180 ? 'month' : 'week';
+
+        function renderChart(data, dates) {
             document.getElementById('loading').style.display = 'none';
             const canvas = document.getElementById('chart');
             canvas.style.display = 'block';
 
             chart = new Chart(canvas, {
                 type: 'line',
-                data: { labels: data.dates, datasets: buildDatasets(data) },
+                data: { labels: dates, datasets: buildDatasets(data, dates) },
                 options: {
                     responsive: true,
                     maintainAspectRatio: true,
@@ -426,7 +499,7 @@
                         x: {
                             type: 'time',
                             time: {
-                                unit: data.dates.length > 180 ? 'month' : 'week',
+                                unit: timeUnit(dates.length),
                                 displayFormats: { week: 'MMM d', month: 'MMM yyyy' },
                                 tooltipFormat: 'MMM d, yyyy',
                             },
@@ -458,12 +531,15 @@
                             padding: 10,
                             cornerRadius: 6,
                             itemSort: (a, b) => b.raw - a.raw,
-                            filter: item => item.raw > 0,
+                            filter: item => item.raw > 0 && !item.dataset.halo,
                             callbacks: {
-                                label: ctx => ' ' + ctx.dataset.label + ': ' + ctx.raw.toLocaleString(),
+                                label: ctx => ' ' + ctx.dataset.label + ': '
+                                    + Math.round(ctx.raw).toLocaleString(),
                                 footer: items => {
+                                    const i = items[0].dataIndex;
                                     const total = items[0].chart.data.datasets
-                                        .reduce((s, ds) => s + ds.data[items[0].dataIndex], 0);
+                                        .filter(ds => ds.stack === 'models')
+                                        .reduce((s, ds) => s + ds.data[i], 0);
                                     return 'Total: ' + total.toLocaleString();
                                 },
                             },
@@ -471,7 +547,24 @@
                         legend: {
                             position: 'top',
                             align: 'end',
+                            // The halo has no legend entry of its own, so hiding the
+                            // average has to take it along or a white line survives.
+                            onClick: (e, item, legend) => {
+                                const ch = legend.chart;
+                                const flip = i => ch.setDatasetVisibility(i, !ch.isDatasetVisible(i));
+                                flip(item.datasetIndex);
+                                if (ch.data.datasets[item.datasetIndex].stack === 'average') {
+                                    const halo = ch.data.datasets.findIndex(ds => ds.halo);
+                                    if (halo >= 0) flip(halo);
+                                }
+                                ch.update();
+                            },
                             labels: {
+                                filter: (item, data) => !data.datasets[item.datasetIndex].halo,
+                                // Drawing order puts the average first; the legend
+                                // reads better with the models in stack order and
+                                // the reference line last.
+                                sort: (a, b) => (a.text === MA_LABEL) - (b.text === MA_LABEL),
                                 usePointStyle: true,
                                 pointStyle: 'rect',
                                 boxWidth: 8,
@@ -487,7 +580,7 @@
         }
 
         function renderTable({ byDate, dates }) {
-            const shown = [...MODEL_SLOTS, OTHER]
+            const shown = STACK
                 .filter(([name]) => dates.slice(-14).some(d => (byDate.get(d)[name] || 0) > 0));
 
             document.getElementById('table-head').innerHTML =
@@ -509,13 +602,14 @@
         const esc = s => String(s).replace(/[&<>"]/g, c =>
             ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-        function renderOther({ byDate, otherByDate, dates }) {
+        function renderOther({ byDate, otherByDate }, dates) {
             const sums = {};
             dates.forEach(d => Object.entries(otherByDate.get(d) || {})
                 .forEach(([m, n]) => { sums[m] = (sums[m] || 0) + n; }));
 
             const rows = Object.entries(sums).sort((a, b) => b[1] - a[1]);
-            if (!rows.length) return;
+            const detail = document.getElementById('other-detail');
+            if (!rows.length) { detail.hidden = true; return; }
 
             const otherTotal = rows.reduce((s, [, n]) => s + n, 0);
             const grand = dates.reduce((s, d) =>
@@ -543,7 +637,7 @@
                 ).join('')
                 + '</tbody></table>';
 
-            document.getElementById('other-detail').hidden = false;
+            detail.hidden = false;
         }
 
         document.getElementById('fullscreen-btn').addEventListener('click', () => {
@@ -559,6 +653,27 @@
             }
         });
 
+        // The range scopes the chart and the Other panel, which states its own
+        // window in prose. The stat cards and the table name theirs in the label
+        // ("7d avg", "Last 14 days") and stay anchored to the latest day.
+        function applyRange(days) {
+            viewDays = days;
+            const dates = inWindow(dataset);
+            chart.data.labels = dates;
+            chart.data.datasets = buildDatasets(dataset, dates);
+            chart.options.scales.x.time.unit = timeUnit(dates.length);
+            chart.update();
+            renderOther(dataset, dates);
+        }
+
+        document.querySelectorAll('.range-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.range-btn')
+                    .forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+                applyRange(Number(btn.dataset.days));
+            });
+        });
+
         document.getElementById('table-btn').addEventListener('click', (e) => {
             const shown = document.getElementById('table-wrap').hidden;
             document.getElementById('table-wrap').hidden = !shown;
@@ -568,8 +683,10 @@
         document.addEventListener('DOMContentLoaded', () => {
             loadData()
                 .then(data => {
-                    renderStats(data); renderChart(data);
-                    renderTable(data); renderOther(data);
+                    dataset = data;
+                    const dates = inWindow(data);
+                    renderStats(data); renderChart(data, dates);
+                    renderTable(data); renderOther(data, dates);
                 })
                 .catch(err => {
                     console.error(err);
