@@ -305,22 +305,32 @@
         // chart does not repaint when volumes reorder. Stack order is slot order,
         // which is the ordering the palette was validated on (adjacent pairs), and
         // it runs oldest to newest so the stack reads as generational succession.
-        // Adding a model means giving it a slot here; everything else folds into
+        // Adding a model means appending a slot here; everything else folds into
         // Other, which wears a neutral ink rather than a ninth categorical hue.
+        //
+        // There are eight colours and they come round again: the ninth model takes
+        // the first colour, the tenth the second. That works because models succeed
+        // one another, so by the time a colour returns its first owner has all but
+        // gone: measured on 2026-10-13, never more than 0.8% of a day's commits.
+        // Check that before appending, since two thick bands of one colour in the
+        // same period cannot be told apart.
         const MODEL_SLOTS = [
-            ['Opus 4.6',   '#2a78d6'],
-            ['Sonnet 4.6', '#eb6834'],
-            ['Opus 4.7',   '#1baf7a'],
-            ['Opus 4.8',   '#eda100'],
-            ['Sonnet 5',   '#e87ba4'],
-            ['Fable 5',    '#008300'],
-            ['Opus 5',     '#4a3aa7'],
-            ['Opus 5.5',   '#e34948'],
+            ['Opus 4.5',   '#2a78d6'],
+            ['Opus 4.6',   '#eb6834'],
+            ['Sonnet 4.6', '#1baf7a'],
+            ['Opus 4.7',   '#eda100'],
+            ['Opus 4.8',   '#e87ba4'],
+            ['Sonnet 5',   '#008300'],
+            ['Fable 5',    '#4a3aa7'],
+            ['Opus 5',     '#e34948'],
+            ['Fable 5.1',  '#2a78d6'],
+            ['Opus 5.5',   '#eb6834'],
+            ['Sonnet 5.5', '#1baf7a'],
         ];
-        // Unnamed and the named models without a slot (Opus 4.5, Fable 5.1,
-        // Sonnet 5.5, Sonnet 4.5, Haiku 4.5, Haiku 5.5, Sonnet 4) land here: 14.7%
-        // of the whole series. It sits at the base of the stack: it holds the oldest
-        // trailer form, and a dark neutral at the top would fight the average line.
+        // Unnamed, Sonnet 4.5, Sonnet 4, Haiku 4.5 and Haiku 5.5 land here: 7.4% of
+        // the whole series, 4.1% of a recent day. It sits at the base of the stack:
+        // it holds the oldest trailer form, and a dark neutral at the top would
+        // fight the average line.
         const OTHER = ['Other', '#52514e'];
         const STACK = [OTHER, ...MODEL_SLOTS];   // base to top
         const SLOT_NAMES = MODEL_SLOTS.map(s => s[0]);
