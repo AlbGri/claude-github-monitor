@@ -87,7 +87,12 @@ DEFAULT_REQUESTS_PER_MINUTE = 10
 MIN_MODEL_COVERAGE = 0.95
 MAX_MODEL_COVERAGE = 1.05
 MAX_DEVIATION = 0.5
-MAX_403_RETRIES = 3
+MAX_TOTAL_REREADS = 2
+
+# Attese fra un tentativo e il successivo quando la risposta non dice quanto
+# aspettare. E' il caso del limite secondario, che scatta sul costo delle query e
+# non sul loro numero: misurato il 2026-10-13, 403 dopo 14 query a 5 req/min.
+RATE_LIMIT_WAITS = [60, 120, 240]
 
 
 # --- API ---
@@ -101,6 +106,25 @@ def get_headers() -> dict[str, str]:
     if GITHUB_TOKEN:
         headers["Authorization"] = f"Bearer {GITHUB_TOKEN}"
     return headers
+
+
+def rate_limit_wait(response: requests.Response, fallback: int) -> int:
+    """Secondi da attendere dopo un 403/429, secondo gli header della risposta.
+
+    Retry-After ha la precedenza. X-RateLimit-Reset vale solo per il limite primario,
+    cioe' quando il budget e' davvero a zero: sul limite secondario indica una
+    finestra che non c'entra, e fidarsene faceva riprovare troppo presto.
+    """
+    retry_after = response.headers.get("Retry-After", "")
+    if retry_after.isdigit():
+        return int(retry_after)
+
+    if response.headers.get("X-RateLimit-Remaining") == "0":
+        reset_time = int(response.headers.get("X-RateLimit-Reset", 0))
+        # +1: svegliarsi sul secondo esatto del reset prende un altro 403.
+        return max(reset_time - int(time.time()) + 1, 1)
+
+    return fallback
 
 
 def get_commit_count(date_str: str, query: str) -> int | None:
@@ -121,7 +145,9 @@ def get_commit_count(date_str: str, query: str) -> int | None:
     """
     params = {"q": f"{query} committer-date:{date_str}", "per_page": 1}
 
-    for attempt in range(MAX_403_RETRIES):
+    max_attempts = len(RATE_LIMIT_WAITS) + 1
+
+    for attempt in range(max_attempts):
         try:
             response = requests.get(SEARCH_COMMITS_URL, headers=get_headers(), params=params)
         except Exception as e:
@@ -131,23 +157,29 @@ def get_commit_count(date_str: str, query: str) -> int | None:
         if response.status_code == 200:
             return response.json().get("total_count", 0)
 
-        if response.status_code == 403:
-            reset_time = int(response.headers.get("X-RateLimit-Reset", 0))
-            wait = max(reset_time - int(time.time()), 10)
-            log.warning(
-                "Rate limit raggiunto (tentativo %d/%d), attendo %ds...",
-                attempt + 1, MAX_403_RETRIES, wait,
+        if response.status_code not in (403, 429):
+            log.error(
+                "Query fallita per %s (HTTP %d): %s",
+                date_str, response.status_code, params["q"],
             )
-            time.sleep(wait)
-            continue
+            return None
 
-        log.error(
-            "Query fallita per %s (HTTP %d): %s",
-            date_str, response.status_code, params["q"],
+        if attempt == max_attempts - 1:
+            break
+
+        try:
+            reason = response.json().get("message", "")
+        except ValueError:
+            reason = response.text
+
+        wait = rate_limit_wait(response, RATE_LIMIT_WAITS[attempt])
+        log.warning(
+            "Rate limit (tentativo %d/%d), attendo %ds: %s",
+            attempt + 1, max_attempts, wait, reason[:80],
         )
-        return None
+        time.sleep(wait)
 
-    log.error("Rate limit non rientrato dopo %d tentativi per %s", MAX_403_RETRIES, date_str)
+    log.error("Rate limit non rientrato dopo %d tentativi per %s", max_attempts, date_str)
     return None
 
 
@@ -162,15 +194,26 @@ def load_model_queries() -> list[tuple[str, str]]:
     39.774 della somma delle tre varianti. Una frase senza decimale gonfia la
     copertura sopra il 100% e falsa la serie.
 
+    Un nome senza decimale ("Opus 5") collide per forza con le versioni successive
+    ("Opus 5.5"). La colonna exclude elenca le frasi da sottrarre con NOT, separate
+    da "|": misurato il 2026-10-11, la frase "Claude Opus 5" contava 1.063.865
+    commit, di cui 1.029.381 erano Opus 5.5.
+
     Returns:
-        Lista di coppie (nome modello, frase di ricerca senza virgolette).
+        Lista di coppie (nome modello, termini di ricerca gia' quotati).
     """
     if not MODEL_QUERIES_CSV.exists():
         log.error("File mancante: %s", MODEL_QUERIES_CSV)
         return []
 
+    queries = []
     with open(MODEL_QUERIES_CSV, "r", encoding="utf-8") as f:
-        return [(row["model"], row["phrase"]) for row in csv.DictReader(f)]
+        for row in csv.DictReader(f):
+            excluded = [phrase for phrase in (row.get("exclude") or "").split("|") if phrase]
+            terms = [f'"{row["phrase"]}"'] + [f'NOT "{phrase}"' for phrase in excluded]
+            queries.append((row["model"], " ".join(terms)))
+
+    return queries
 
 
 # --- Raccolta ---
@@ -191,8 +234,8 @@ def collect_model_data(
     """
     counts = {}
 
-    for i, (model, phrase) in enumerate(model_queries):
-        count = get_commit_count(date_str, f'"{phrase}"')
+    for i, (model, query) in enumerate(model_queries):
+        count = get_commit_count(date_str, query)
         if count is None:
             log.warning("  %s: query fallita, giorno invalidato", model)
             return None
@@ -417,7 +460,6 @@ def main() -> None:
                     raise RuntimeError("co_authored=0: token scaduto o pattern non piu' valido")
                 log.info("  co_authored: %d", co_authored)
                 check_deviation(all_data, date_str, co_authored)
-                all_data[date_str] = co_authored
                 time.sleep(delay)
 
             models = collect_model_data(date_str, model_queries, delay)
@@ -429,17 +471,38 @@ def main() -> None:
             if args.only_model:
                 # Aggiorna le sole chiavi richieste: gli altri modelli del giorno non
                 # sono stati interrogati e sovrascrivere il giorno li cancellerebbe.
-                day = all_models.setdefault(date_str, {})
+                day = dict(all_models.get(date_str, {}))
                 for model, _ in model_queries:
                     if model in models:
                         day[model] = models[model]
                     else:
                         day.pop(model, None)
             else:
-                all_models[date_str] = models
                 day = models
 
-            coverage = sum(day.values()) / co_authored
+            # La query del totale torna spesso con incomplete_results=true, cioe' con
+            # un conteggio parziale: il 2026-08-31 letto due volte a un minuto di
+            # distanza ha dato 706.315 e 652.488. Un totale troppo basso si vede solo
+            # dalla copertura. Essendo un limite inferiore, fra piu' letture vale la
+            # piu' alta; se non basta il giorno non si scrive, perche' --skip-existing
+            # lo renderebbe definitivo.
+            day_sum = sum(day.values())
+            rereads = 0
+            while day_sum / co_authored > MAX_MODEL_COVERAGE and not args.models_only:
+                if rereads == MAX_TOTAL_REREADS:
+                    raise RuntimeError(
+                        f"copertura {day_sum / co_authored:.1%}: "
+                        "totale parziale o frase che matcha troppo"
+                    )
+                time.sleep(delay)
+                reread = get_commit_count(date_str, QUERY_CO_AUTHORED)
+                if reread is None:
+                    raise RuntimeError("rilettura di co_authored fallita")
+                log.info("  co_authored riletto: %d", reread)
+                co_authored = max(co_authored, reread)
+                rereads += 1
+
+            coverage = day_sum / co_authored
             if coverage < MIN_MODEL_COVERAGE:
                 log.warning(
                     "  copertura per modello %.1f%%: probabile modello non in %s",
@@ -453,6 +516,10 @@ def main() -> None:
             else:
                 log.info("  copertura per modello: %.1f%%", coverage * 100)
 
+            # Si scrive solo a giorno validato: un totale nuovo accanto a modelli
+            # vecchi sarebbe un giorno incoerente che nessun controllo rileva.
+            all_data[date_str] = co_authored
+            all_models[date_str] = day
             processed.append(date_str)
         except Exception as e:
             log.error("Errore per %s: %s, giorno saltato.", date_str, e)

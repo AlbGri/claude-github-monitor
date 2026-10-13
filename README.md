@@ -18,11 +18,13 @@ Since early January 2026 the trailer also names the model (`Co-Authored-By: Clau
 
 ### Data accuracy
 
-Every run checks **coverage**: the per-model counts divided by the day's total. A value below 95% means a model is missing from `data/model_queries.csv`; above 105% means a query phrase is matching more than it should. Both are logged as warnings.
+Every run checks **coverage**: the per-model counts divided by the day's total. A value below 95% means a model is missing from `data/model_queries.csv` and is logged as a warning. A value above 105% means either a query phrase is matching more than it should or, far more often, the day's total came back short: GitHub answers heavy queries with `incomplete_results: true` and a partial count, and 2026-08-31 read twice a minute apart gave 706,315 and 652,488. A partial count is a lower bound, so the tracker reads the total again, up to twice, and keeps the highest value. If coverage is still above 105% the day is not written, and the next run reads it again.
 
 Model phrases must always carry the full version number including the decimal. GitHub's search tokenizes `4.8`, so the phrase `Co-Authored-By: Claude Opus 4` also matches 4.6, 4.7 and 4.8 -- measured on 2026-09-05, 40,010 against the 39,774 of the three variants summed.
 
-A name with no decimal cannot be separated that way, so `Sonnet 4` is the one phrase that carries the full trailer including `<noreply@anthropic.com>`. That form is exact but **not** a general fix: the trailer address is not always `noreply@anthropic.com`, and appending it drops Opus 5 by 29% and Fable 5 by 87%. Use it only to break a collision.
+A name with no decimal cannot be separated that way: `Opus 5` also matches `Opus 5.5`. The `exclude` column of `data/model_queries.csv` lists the phrases to subtract with `NOT`, separated by `|`. Measured on 2026-10-11, the bare `Claude Opus 5` phrase counted 1,063,865 commits, of which 1,029,381 were Opus 5.5.
+
+`Sonnet 4` predates that column and instead carries the full trailer including `<noreply@anthropic.com>`. That form is exact but **not** a general fix: the trailer address is not always `noreply@anthropic.com`, and appending it drops Opus 5 by 29% and Fable 5 by 87%. Use it only to break a collision.
 
 A single failed query invalidates the whole day rather than dropping one model. Skipping just the failed model looked safer until 2026-09-03 was written without Opus 5 -- 432,000 commits missing -- and `--skip-existing` then treated the day as complete.
 
@@ -117,7 +119,7 @@ Manual runs are also supported via the "Run workflow" button in the Actions tab.
 - **Trailer opt-out**: users can disable or modify the `Co-Authored-By` trailer, making those commits undetectable.
 - **Model coverage depends on config**: a model absent from `data/model_queries.csv` lands nowhere. The coverage check makes that visible in the logs, but it does not fix itself.
 - **No denominator**: the tracker reports absolute volume, not a share of all GitHub activity. See *Why there is no adoption rate* above.
-- **API rate limits**: the script defaults to 10 req/min (the limit is 30 for authenticated users) and issues one query per model per day. A full per-model backfill of 270 days takes about 3 hours at `--rate 25`.
+- **API rate limits**: the script defaults to 10 req/min (the limit is 30 for authenticated users) and issues one query per model per day. What bites in practice is GitHub's secondary rate limit, which depends on the cost of the queries rather than their number and triggers well below 30 req/min; the tracker then waits 60, 120 and 240 seconds before giving up on the day. A full per-model backfill of 270 days takes about 3 hours at `--rate 25`.
 
 ## Related
 
