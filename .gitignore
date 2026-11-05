@@ -25,13 +25,10 @@ Thumbs.db
 Desktop.ini
 .DS_Store
 
-# Project prompt (not for public repo)
-REGOLE_AI_claude-github-monitor.md
-
-# Local working files (not for public repo)
-_local/
+# Private documents (only README and CHANGELOG are public)
+/*.md
+!/README.md
+!/CHANGELOG.md
 CLAUDE.md
-STATO_PROGETTO.md
-
-# Claude Code
+_local/
 .claude/
