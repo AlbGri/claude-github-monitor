@@ -2,6 +2,35 @@
 
 Notable changes to this project. Dates are the day the change went live.
 
+## 1.3.0 -- 2026-10-13
+
+### Added
+
+- **Opus 5.5, Sonnet 5.5, Fable 5.1 and Haiku 5.5 are tracked.** Fable 5.1 first appears on
+  2026-09-01, Opus 5.5 and Sonnet 5.5 on 2026-09-22.
+- An `exclude` column in `data/model_queries.csv`: a model name with no decimal subtracts its
+  successors, so `Opus 5` no longer counts `Opus 5.5`.
+
+### Changed
+
+- **The eight chart colours come round again**, so every sizeable model has a slot of its own:
+  the ninth model takes the first colour, the tenth the second. A colour returns only after its
+  first owner has all but gone -- once the newer model of a pair appears, the older one never
+  exceeds 0.8% of a day's commits. Opus 4.5 is back in its slot instead of Other.
+
+### Fixed
+
+- **The new models were counted inside the old rows.** The bare phrases "Claude Opus 5",
+  "Claude Sonnet 5" and "Claude Fable 5" also matched the 5.5 and 5.1 releases, so coverage stayed
+  at 100% and nothing flagged it: on 2026-10-11, 97% of the `Opus 5` row was Opus 5.5. The days
+  from 2026-08-25 to 2026-10-12 were re-read with the new models split out.
+- **Partial totals are read again.** Coverage above 105% almost always means GitHub returned a
+  partial count for the total: the tracker now reads it up to twice more and keeps the highest
+  value, and a day is written only once total and models validate together. On the re-read, daily
+  totals from 1 September rose by 1-20%.
+- **GitHub's secondary rate limit is handled**: the tracker waits 60, 120 and 240 seconds, honours
+  `Retry-After`, logs GitHub's message, and no longer spends the last wait without retrying.
+
 ## 1.2.0 -- 2026-09-12
 
 ### Added
