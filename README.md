@@ -133,4 +133,4 @@ the adoption-rate metric and added the per-model breakdown.
 
 ## License
 
-[MIT](LICENSE)
+[AGPL-3.0](LICENSE)
