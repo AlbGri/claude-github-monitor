@@ -8,7 +8,7 @@ This project monitors how widely [Claude Code](https://docs.anthropic.com/en/doc
 
 ## Latest Data
 
-**[Live Dashboard](https://cm.albgri.com/)** -- Daily commit volume split by model, with 7-day averages and a data table. Also available at [albgri.github.io/claude-github-monitor](https://albgri.github.io/claude-github-monitor/).
+**[Live Dashboard](https://cgm.albgri.com/)** -- Daily commit volume split by model, with 7-day averages and a data table. Also available at [albgri.github.io/claude-github-monitor](https://albgri.github.io/claude-github-monitor/).
 
 ## Methodology
 
