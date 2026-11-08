@@ -303,6 +303,7 @@
         const MODEL_CSV = RAW + 'claude_commits_by_model.csv';
         const SURFACE = '#ffffff';
         const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format;
 
         // Fixed slot assignment: colour follows the model, never its rank, so the
         // chart does not repaint when volumes reorder. Stack order is slot order,
@@ -427,7 +428,7 @@
             const avgRecent = avg(recent);
 
             document.getElementById('stat-date').textContent = last;
-            document.getElementById('stat-claude').textContent = (avgRecent / 1000).toFixed(0) + 'K';
+            document.getElementById('stat-claude').textContent = compact(avgRecent);
 
             if (prior.length === 7) {
                 const growth = (avgRecent / avg(prior) - 1) * 100;
@@ -540,7 +541,7 @@
                                 font: { size: 12, weight: '600' },
                             },
                             ticks: {
-                                callback: v => (v / 1000).toFixed(0) + 'K',
+                                callback: compact,
                                 color: '#52514e',
                                 font: { size: 11 },
                             },
