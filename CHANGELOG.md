@@ -2,6 +2,21 @@
 
 Notable changes to this project. Dates are the day the change went live.
 
+## 1.4.0 -- 2026-11-25
+
+### Added
+
+- **A dark theme.** The page follows the system setting until you choose one with the button in the top bar, and your browser remembers the choice.
+
+### Changed
+
+- **The page uses the common style of AlbGri's sites**, with the same fonts, tinted neutrals and layout, all served from the site itself. The date of the latest data moves to the top bar, and the summary boxes now cover the last 7 days.
+- **New chart colours.** The eight model colours are the shared chart series, checked to stay distinguishable between neighbouring bands, also for colour-blind readers. They come round in the same order as before, so every model keeps its place in the cycle. Other is a tinted grey.
+
+### Fixed
+
+- **The chart was squashed on phones.** A minimum height stretched the drawing and distorted its labels. The chart now has a fixed height, and the date labels lie flat.
+
 ## 1.3.0 -- 2026-10-13
 
 ### Added
