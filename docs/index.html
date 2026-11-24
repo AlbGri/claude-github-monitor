@@ -188,12 +188,16 @@
         }
         .other-detail summary::-webkit-details-marker { display: none; }
         .other-detail summary::after {
-            content: '\25BE';
-            font-size: 0.7em;
-            margin-left: 0.4rem;
+            content: '';
+            width: 0.35em;
+            height: 0.35em;
+            border-right: 1.5px solid currentColor;
+            border-bottom: 1.5px solid currentColor;
+            transform: rotate(45deg) translateY(-0.15em);
+            margin-left: 0.5rem;
             transition: transform 0.15s;
         }
-        .other-detail[open] summary::after { transform: rotate(180deg); }
+        .other-detail[open] summary::after { transform: rotate(-135deg) translateY(-0.15em); }
         .other-detail summary:hover { color: #1a1a1a; }
         .other-detail summary:focus-visible { outline: 2px solid #2a78d6; outline-offset: 2px; }
         .other-body {
@@ -273,7 +277,7 @@
         <main id="chart-section" class="chart-container" tabindex="-1">
             <div class="chart-tools">
                 <button class="tool-btn" id="table-btn" aria-pressed="false" title="Toggle data table">Table</button>
-                <button class="tool-btn" id="fullscreen-btn" aria-label="Toggle fullscreen" title="Fullscreen">&#x26F6;</button>
+                <button class="tool-btn" id="fullscreen-btn" aria-label="Toggle fullscreen">Fullscreen</button>
             </div>
             <div class="loading" id="loading" role="status" aria-live="polite">Loading data...</div>
             <canvas id="chart" style="display:none" role="img" aria-label="Stacked area chart of daily Claude Code commits on public GitHub, split by Claude model"></canvas>
