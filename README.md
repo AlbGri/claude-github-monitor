@@ -128,8 +128,7 @@ Manual runs are also supported via the "Run workflow" button in the Actions tab.
 
 ## Changelog
 
-Notable changes are recorded in [CHANGELOG.md](CHANGELOG.md). Version 1.0.0 removed
-the adoption-rate metric and added the per-model breakdown.
+Notable changes are recorded in [CHANGELOG.md](CHANGELOG.md). Version 1.0.0 removed the adoption-rate metric and added the per-model breakdown.
 
 ## License
 
