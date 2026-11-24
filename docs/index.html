@@ -19,7 +19,8 @@
     <meta http-equiv="Content-Security-Policy" content="
         default-src 'none';
         script-src 'self' 'unsafe-inline';
-        style-src 'unsafe-inline';
+        style-src 'self' 'unsafe-inline';
+        font-src 'self';
         connect-src https://raw.githubusercontent.com;
         img-src 'self' data:;
         base-uri 'self'
@@ -28,213 +29,49 @@
     <!-- Performance: preconnect for CSV fetch -->
     <link rel="preconnect" href="https://raw.githubusercontent.com" crossorigin>
 
+    <link rel="stylesheet" href="caratteri/caratteri.css">
+    <link rel="stylesheet" href="stile-comune.css">
+    <script>
+        // Applied before the first paint, or the dark theme flashes light.
+        // ?tema=scuro in the address forces a theme for screenshots.
+        const THEME_KEY = 'claude-github-monitor/tema';
+        let theme = new URLSearchParams(location.search).get('tema');
+        try { theme = theme || localStorage.getItem(THEME_KEY); } catch (e) { /* storage blocked */ }
+        if (theme) document.documentElement.dataset.tema = theme;
+    </script>
     <script src="vendor/chart.umd.min.js" defer></script>
     <script src="vendor/chartjs-adapter-date-fns.bundle.min.js" defer></script>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f8f9fa;
-            color: #1a1a1a;
-            line-height: 1.6;
-        }
-        .skip-link {
-            position: absolute;
-            top: -100%;
-            left: 0.5rem;
-            padding: 0.5rem 1rem;
-            background: #1a1a1a;
-            color: #fff;
-            border-radius: 0 0 6px 6px;
-            z-index: 100;
-            text-decoration: none;
-        }
+        /* The site name is the page title: one page, no title to repeat below the bar */
+        h1.marchio { margin: 0; }
+        /* One page, nothing to map: no site-map column */
+        .pagina { grid-template-columns: minmax(0, 1fr); }
+        /* The summary boxes are not links: no hover cue */
+        .riquadro:hover { border-color: var(--line); }
+        .skip-link { position: absolute; top: -100%; left: 8px; z-index: 10; padding: 6px 12px; background: var(--surface);
+            color: var(--ink); border: 1px solid var(--ink); border-radius: 0 0 6px 6px; }
         .skip-link:focus { top: 0; }
-        .container {
-            max-width: 960px;
-            margin: 0 auto;
-            padding: 2.5rem 1.5rem;
-        }
-        h1 {
-            font-size: 1.6rem;
-            font-weight: 600;
-            margin-bottom: 0.25rem;
-        }
-        .subtitle {
-            color: #6b7280;
-            font-size: 0.9rem;
-            margin-bottom: 1.75rem;
-        }
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 0.75rem;
-            margin-bottom: 1.25rem;
-        }
-        .stat-card {
-            background: #fff;
-            border-radius: 10px;
-            padding: 1rem 1.25rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-            display: flex;
-            flex-direction: column;
-        }
-        .stat-label {
-            font-size: 0.7rem;
-            color: #9ca3af;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-        .stat-value {
-            font-size: 1.4rem;
-            font-weight: 700;
-            margin-top: auto;
-        }
-        /* Values wear text tokens, not series colors: the swatch beside a model
-           name in the legend and table carries identity, the number does not. */
-        .stat-value { color: #1a1a1a; }
-        .stat-muted { color: #6b7280; }
         /* Filters live in their own row above the card, not in the chart chrome. */
-        .controls {
-            display: flex;
-            gap: 0.35rem;
-            margin-bottom: 0.6rem;
-        }
-        .chart-container {
-            position: relative;
-            background: #fff;
-            border-radius: 12px;
-            padding: 1.25rem 1.25rem 0.75rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-        }
-        .chart-tools {
-            position: absolute;
-            top: 0.5rem;
-            right: 0.5rem;
-            display: flex;
-            gap: 0.35rem;
-            z-index: 10;
-        }
-        .tool-btn {
-            background: rgba(0,0,0,0.05);
-            border: none;
-            border-radius: 6px;
-            padding: 0.35rem 0.5rem;
-            cursor: pointer;
-            color: #52514e;
-            font-size: 0.75rem;
-            line-height: 1;
-            font-family: inherit;
-        }
-        .tool-btn:hover { background: rgba(0,0,0,0.1); }
-        .tool-btn[aria-pressed="true"] { background: #1a1a1a; color: #fff; }
-        .chart-container:fullscreen,
-        .chart-container:-webkit-full-screen {
-            background: #fff;
-            padding: 1rem;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }
-        .chart-container:fullscreen canvas,
-        .chart-container:-webkit-full-screen canvas {
-            max-height: 90vh;
-        }
-        .table-wrap {
-            overflow-x: auto;
-            margin-top: 1.75rem;
-        }
-        table {
-            border-collapse: collapse;
-            font-size: 0.8rem;
-            width: 100%;
-            white-space: nowrap;
-        }
-        th, td {
-            padding: 0.35rem 0.6rem;
-            text-align: right;
-            border-bottom: 1px solid #f0efec;
-        }
-        th:first-child, td:first-child { text-align: left; }
-        thead th {
-            color: #52514e;
-            font-weight: 600;
-            border-bottom: 1px solid #d9d8d4;
-        }
-        tbody td { color: #52514e; font-variant-numeric: tabular-nums; }
-        tbody td:last-child { color: #1a1a1a; font-weight: 600; }
-        .swatch {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            border-radius: 2px;
-            margin-right: 0.35rem;
-            vertical-align: baseline;
-        }
-        /* Quiet by default: one muted line until someone wants the detail. */
-        .other-detail {
-            margin-top: 0.75rem;
-            font-size: 0.8rem;
-            color: #6b7280;
-        }
-        .other-detail summary {
-            cursor: pointer;
-            padding: 0.35rem 0.25rem;
-            list-style: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.1rem;
-            border-radius: 6px;
-        }
-        .other-detail summary::-webkit-details-marker { display: none; }
-        .other-detail summary::after {
-            content: '';
-            width: 0.35em;
-            height: 0.35em;
-            border-right: 1.5px solid currentColor;
-            border-bottom: 1.5px solid currentColor;
-            transform: rotate(45deg) translateY(-0.15em);
-            margin-left: 0.5rem;
-            transition: transform 0.15s;
-        }
-        .other-detail[open] summary::after { transform: rotate(-135deg) translateY(-0.15em); }
-        .other-detail summary:hover { color: #1a1a1a; }
-        .other-detail summary:focus-visible { outline: 2px solid #2a78d6; outline-offset: 2px; }
-        .other-body {
-            background: #fff;
-            border-radius: 10px;
-            padding: 0.9rem 1.25rem 1rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-            margin-top: 0.35rem;
-        }
-        .other-body p {
-            margin-bottom: 0.6rem;
-            color: #6b7280;
-            font-size: 0.78rem;
-        }
-        .other-body table { font-size: 0.78rem; }
-        footer {
-            margin-top: 1.5rem;
-            text-align: center;
-            color: #9ca3af;
-            font-size: 0.8rem;
-        }
-        footer a { color: #6b7280; text-decoration: none; }
-        footer a:hover { text-decoration: underline; }
-        .loading {
-            text-align: center;
-            padding: 4rem;
-            color: #9ca3af;
-        }
-        @media (max-width: 600px) {
-            .container { padding: 1.5rem 1rem; }
-            .stats { grid-template-columns: repeat(2, 1fr); }
-            .stat-card { padding: 0.75rem 1rem; }
-            h1 { font-size: 1.3rem; }
-            .chart-container canvas { min-height: 260px; }
-        }
-        @media (prefers-reduced-motion: reduce) {
-            * { transition: none !important; }
+        .range { margin: 14px 0 8px; }
+        .testa-grafico { display: flex; flex-wrap: wrap; gap: 6px 12px; justify-content: space-between; align-items: start; }
+        .testa-grafico .btn + .btn { margin-left: 6px; }
+        .tela { position: relative; height: min(60vh, 520px); min-height: 300px; margin-top: 6px; }
+        .scheda:fullscreen, .scheda:-webkit-full-screen { overflow: auto; }
+        .scheda:fullscreen .tela, .scheda:-webkit-full-screen .tela { height: 85vh; }
+        .loading { padding: 4rem 0; text-align: center; color: var(--muted); }
+        .table-wrap { overflow-x: auto; margin-top: 12px; }
+        .tabella { white-space: nowrap; }
+        /* thirteen columns: a step smaller, so it fits a laptop without scrolling */
+        #data-table { font-size: .9rem; }
+        /* four columns: at full width they would drift apart */
+        #other-body .tabella { width: auto; }
+        .tabella caption { text-align: left; padding-bottom: 4px; font-size: .88rem; color: var(--muted); }
+        .swatch { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
+        .swatch.altro { background: var(--altro); }
+        details.piega { margin-top: 14px; }
+        @media (max-width: 760px) {
+            /* the legend wraps to four rows here: the extra height goes to the plot */
+            .tela { height: 400px; min-height: 0; }
         }
     </style>
 </head>
@@ -242,70 +79,82 @@
     <!-- Skip link for keyboard navigation (WCAG 2.1) -->
     <a href="#chart-section" class="skip-link">Skip to chart</a>
 
-    <div class="container">
-        <header>
-            <h1>Claude Code GitHub Tracker</h1>
-            <p class="subtitle">Public GitHub commits carrying the Claude Code <code>Co-Authored-By</code> trailer, broken down by model</p>
-        </header>
+    <header class="barra">
+        <h1 class="marchio">Claude Code GitHub Tracker</h1>
+        <span class="aggiornato" id="updated"></span>
+        <span class="controlli"><button type="button" class="btn tema" id="tema" aria-label="Switch to dark theme"><i></i><span class="et">Dark</span></button></span>
+    </header>
 
-        <section class="stats" aria-label="Summary statistics" role="region">
-            <div class="stat-card">
-                <div class="stat-label" id="label-date">Latest date</div>
-                <div class="stat-value stat-muted" id="stat-date" aria-labelledby="label-date">--</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label" id="label-claude">Claude Commits (7d avg)</div>
-                <div class="stat-value" id="stat-claude" aria-labelledby="label-claude" aria-live="polite">--</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label" id="label-growth">Growth vs 30d ago</div>
-                <div class="stat-value" id="stat-growth" aria-labelledby="label-growth" aria-live="polite">--</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label" id="label-model">Leading model (7d)</div>
-                <div class="stat-value" id="stat-model" aria-labelledby="label-model" aria-live="polite">--</div>
+    <div class="pagina">
+    <main>
+        <p class="tenue">Public GitHub commits carrying the Claude Code <code>Co-Authored-By</code> trailer, broken down by model.</p>
+
+        <section class="fila" aria-labelledby="label-week">
+            <h2 id="label-week">Last 7 days</h2>
+            <div class="riquadri">
+                <div class="riquadro">
+                    <span class="r-titolo" id="label-claude">Commits per day</span>
+                    <span class="r-num" id="stat-claude" aria-labelledby="label-claude" aria-live="polite">--</span>
+                </div>
+                <div class="riquadro">
+                    <span class="r-titolo" id="label-growth">Vs a month earlier</span>
+                    <span class="r-num" id="stat-growth" aria-labelledby="label-growth" aria-live="polite">--</span>
+                </div>
+                <div class="riquadro">
+                    <span class="r-titolo" id="label-model">Leading model</span>
+                    <span class="r-num" aria-labelledby="label-model" aria-live="polite"><span id="stat-model">--</span> <small id="stat-share"></small></span>
+                </div>
             </div>
         </section>
 
-        <div class="controls" role="group" aria-label="Time range">
-            <button class="tool-btn range-btn" data-range="30" aria-pressed="false">30d</button>
-            <button class="tool-btn range-btn" data-range="90" aria-pressed="false">90d</button>
-            <button class="tool-btn range-btn" data-range="ytd" aria-pressed="true">YTD</button>
-            <button class="tool-btn range-btn" data-range="all" aria-pressed="false">All</button>
+        <div class="segmenti range" role="group" aria-label="Time range">
+            <button type="button" class="btn range-btn" data-range="30" aria-pressed="false">30d</button>
+            <button type="button" class="btn range-btn" data-range="90" aria-pressed="false">90d</button>
+            <button type="button" class="btn range-btn" data-range="ytd" aria-pressed="true">YTD</button>
+            <button type="button" class="btn range-btn" data-range="all" aria-pressed="false">All</button>
         </div>
 
-        <main id="chart-section" class="chart-container" tabindex="-1">
-            <div class="chart-tools">
-                <button class="tool-btn" id="table-btn" aria-pressed="false" title="Toggle data table">Table</button>
-                <button class="tool-btn" id="fullscreen-btn" aria-label="Toggle fullscreen">Fullscreen</button>
+        <section id="chart-section" class="scheda" tabindex="-1" aria-labelledby="chart-title">
+            <div class="testa-grafico">
+                <div>
+                    <h2 id="chart-title">Commits per day, by model</h2>
+                    <p class="tenue">Stacked by model, with the 7-day average of the total. Source: GitHub Search API.</p>
+                </div>
+                <div>
+                    <button type="button" class="btn" id="table-btn" aria-pressed="false" title="Toggle data table">Table</button>
+                    <button type="button" class="btn" id="fullscreen-btn" aria-label="Toggle fullscreen">Fullscreen</button>
+                </div>
             </div>
             <div class="loading" id="loading" role="status" aria-live="polite">Loading data...</div>
-            <canvas id="chart" style="display:none" role="img" aria-label="Stacked area chart of daily Claude Code commits on public GitHub, split by Claude model"></canvas>
+            <div class="tela" id="tela" hidden>
+                <canvas id="chart" role="img" aria-label="Stacked area chart of daily Claude Code commits on public GitHub, split by Claude model"></canvas>
+            </div>
             <div class="table-wrap" id="table-wrap" hidden>
-                <table id="data-table">
-                    <caption class="stat-label" style="text-align:left;padding-bottom:0.5rem">Last 14 days, commits per model</caption>
+                <table class="tabella" id="data-table">
+                    <caption>Last 14 days, commits per model</caption>
                     <thead><tr id="table-head"></tr></thead>
                     <tbody id="table-body"></tbody>
                 </table>
             </div>
-        </main>
+        </section>
 
-        <details class="other-detail" id="other-detail" hidden>
-            <summary><span class="swatch" style="background:#52514e"></span>What is in Other?</summary>
-            <div class="other-body" id="other-body"></div>
+        <details class="piega" id="other-detail" hidden>
+            <summary><span class="swatch altro"></span>What is in Other?</summary>
+            <div id="other-body"></div>
         </details>
 
-        <footer role="contentinfo">
-            Source: <a href="https://github.com/AlbGri/claude-github-monitor">AlbGri/claude-github-monitor</a>
-            &middot; Updated daily via GitHub Actions
+        <footer class="piede">
+            Source: <a href="https://github.com/AlbGri/claude-github-monitor">AlbGri/claude-github-monitor</a>, updated daily via GitHub Actions.<span class="solo-telefono" id="updated-footer"></span>
         </footer>
+    </main>
     </div>
 
     <script>
         const RAW = 'https://raw.githubusercontent.com/AlbGri/claude-github-monitor/main/data/';
         const DAILY_CSV = RAW + 'claude_commits_daily.csv';
         const MODEL_CSV = RAW + 'claude_commits_by_model.csv';
-        const SURFACE = '#ffffff';
+        // Colours come from the common style sheet, so they follow the theme.
+        const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
         const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format;
 
@@ -314,37 +163,28 @@
         // which is the ordering the palette was validated on (adjacent pairs), and
         // it runs oldest to newest so the stack reads as generational succession.
         // Adding a model means appending a slot here; everything else folds into
-        // Other, which wears a neutral ink rather than a ninth categorical hue.
+        // Other, which wears the style's grey (--altro) rather than a ninth hue.
         //
-        // There are eight colours and they come round again: the ninth model takes
+        // The eight colours are the common style's chart series, --s1 to --s8.
+        // They come round again: the ninth model takes
         // the first colour, the tenth the second. That works because models succeed
         // one another, so by the time a colour returns its first owner has all but
         // gone: measured on 2026-10-13, never more than 0.8% of a day's commits.
         // Check that before appending, since two thick bands of one colour in the
         // same period cannot be told apart.
-        const MODEL_SLOTS = [
-            ['Opus 4.5',   '#2a78d6'],
-            ['Opus 4.6',   '#eb6834'],
-            ['Sonnet 4.6', '#1baf7a'],
-            ['Opus 4.7',   '#eda100'],
-            ['Opus 4.8',   '#e87ba4'],
-            ['Sonnet 5',   '#008300'],
-            ['Fable 5',    '#4a3aa7'],
-            ['Opus 5',     '#e34948'],
-            ['Fable 5.1',  '#2a78d6'],
-            ['Opus 5.5',   '#eb6834'],
-            ['Sonnet 5.5', '#1baf7a'],
+        const SLOT_NAMES = [
+            'Opus 4.5', 'Opus 4.6', 'Sonnet 4.6', 'Opus 4.7', 'Opus 4.8', 'Sonnet 5', 'Fable 5', 'Opus 5',
+            'Fable 5.1', 'Opus 5.5', 'Sonnet 5.5',
         ];
+        const MODEL_SLOTS = SLOT_NAMES.map((name, k) => [name, '--s' + (k % 8 + 1)]);
         // Unnamed, Sonnet 4.5, Sonnet 4, Haiku 4.5 and Haiku 5.5 land here: 7.4% of
         // the whole series, 4.1% of a recent day. It sits at the base of the stack:
-        // it holds the oldest trailer form, and a dark neutral at the top would
+        // it holds the oldest trailer form, and a neutral at the top would
         // fight the average line.
-        const OTHER = ['Other', '#52514e'];
+        const OTHER = ['Other', '--altro'];
         const STACK = [OTHER, ...MODEL_SLOTS];   // base to top
-        const SLOT_NAMES = MODEL_SLOTS.map(s => s[0]);
         const MA_WINDOW = 7;
         const MA_LABEL = MA_WINDOW + '-day average';
-        const INK = '#1a1a1a';
 
         let chart = null;
         let dataset = null;       // everything loaded, unsliced
@@ -431,7 +271,10 @@
             const prior = all.slice(-37, -30);
             const avgRecent = avg(recent);
 
-            document.getElementById('stat-date').textContent = last;
+            const through = 'Data through ' + new Date(last + 'T00:00:00Z').toLocaleDateString('en-US',
+                { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+            document.getElementById('updated').textContent = through;
+            document.getElementById('updated-footer').textContent = ' ' + through + '.';
             document.getElementById('stat-claude').textContent = compact(avgRecent);
 
             if (prior.length === 7) {
@@ -450,19 +293,20 @@
             if (entries.length) {
                 const total = entries.reduce((s, [, n]) => s + n, 0);
                 const [name, n] = entries.sort((a, b) => b[1] - a[1])[0];
-                document.getElementById('stat-model').textContent =
-                    name + ' ' + Math.round(n / total * 100) + '%';
+                document.getElementById('stat-model').textContent = name;
+                document.getElementById('stat-share').textContent = Math.round(n / total * 100) + '%';
             }
         }
 
         function buildDatasets({ byDate, ma }, dates) {
+            const surface = css('--surface'), ink = css('--ink');
             const areas = STACK
                 .map(([name, color]) => ({
                     label: name,
                     data: dates.map(d => (byDate.get(d) || {})[name] || 0),
-                    borderColor: SURFACE,   // 2px surface gap between stacked fills
+                    borderColor: surface,   // 2px surface gap between stacked fills
                     borderWidth: 1.5,
-                    backgroundColor: color,
+                    backgroundColor: css(color),
                     fill: true,
                     stack: 'models',
                     pointRadius: 0,
@@ -474,15 +318,15 @@
             // Its own stack group, so a stacked y axis leaves it at its own value
             // instead of piling it on top of the areas. Neutral ink, not a ninth
             // categorical hue: it is the same total the stack already shows, smoothed.
-            // It rides on the top edge of the stack, where Other is also a dark
-            // neutral, so a surface-coloured halo goes underneath to keep it legible.
+            // It rides on the top edge of the stack, so a surface-coloured halo
+            // goes underneath to keep it legible against the fills.
             // Chart.js draws datasets last-to-first, so these two go in front of the
             // areas to end up on top of them: the line first, its halo right behind.
             const avg = dates.map(d => ma.get(d) ?? null);
             areas.unshift({
                 label: '', halo: true,
                 data: avg,
-                borderColor: SURFACE,
+                borderColor: surface,
                 borderWidth: 5,
                 fill: false,
                 stack: 'halo',   // its own group, or it stacks with the line it backs
@@ -494,9 +338,9 @@
             areas.unshift({
                 label: MA_LABEL,
                 data: avg,
-                borderColor: INK,
+                borderColor: ink,
                 borderWidth: 2,
-                backgroundColor: INK,
+                backgroundColor: ink,
                 fill: false,
                 stack: 'average',
                 spanGaps: false,
@@ -510,102 +354,110 @@
 
         const timeUnit = n => n > 180 ? 'month' : 'week';
 
-        function renderChart(data, dates) {
-            document.getElementById('loading').style.display = 'none';
-            const canvas = document.getElementById('chart');
-            canvas.style.display = 'block';
-
-            chart = new Chart(canvas, {
-                type: 'line',
-                data: { labels: dates, datasets: buildDatasets(data, dates) },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    aspectRatio: 2.2,
-                    animation: reducedMotion ? false : { duration: 600 },
-                    interaction: { mode: 'index', intersect: false },
-                    scales: {
-                        x: {
-                            type: 'time',
-                            time: {
-                                unit: timeUnit(dates.length),
-                                displayFormats: { week: 'MMM d', month: 'MMM yyyy' },
-                                tooltipFormat: 'MMM d, yyyy',
-                            },
-                            grid: { display: false },
-                            ticks: { color: '#52514e', font: { size: 11 } },
+        // Colours and font are read from the style sheet each time, so a theme
+        // change only has to rebuild the options and the datasets.
+        function chartOptions(dates) {
+            const muted = css('--muted'), line = css('--line'), ink = css('--ink'), surface = css('--surface');
+            Chart.defaults.font.family = css('--sans');
+            Chart.defaults.color = muted;
+            const text = { size: 12.5 };
+            return {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: reducedMotion ? false : { duration: 600 },
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: {
+                            unit: timeUnit(dates.length),
+                            displayFormats: { week: 'MMM d', month: 'MMM yyyy' },
+                            tooltipFormat: 'MMM d, yyyy',
                         },
-                        y: {
-                            stacked: true,
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Commits per day',
-                                color: '#52514e',
-                                font: { size: 12, weight: '600' },
+                        grid: { display: false },
+                        border: { color: line },
+                        // Level labels, thinned out: slanted ones eat the plot height on a phone
+                        ticks: { color: muted, font: text, maxRotation: 0, autoSkipPadding: 16 },
+                    },
+                    y: {
+                        stacked: true,
+                        beginAtZero: true,
+                        title: { display: true, text: 'Commits per day', color: muted, font: text },
+                        ticks: { callback: compact, color: muted, font: text },
+                        grid: { color: line },
+                        border: { display: false },
+                    },
+                },
+                plugins: {
+                    tooltip: {
+                        backgroundColor: surface,
+                        borderColor: ink,
+                        borderWidth: 1,
+                        titleColor: ink,
+                        bodyColor: ink,
+                        footerColor: ink,
+                        multiKeyBackground: surface,
+                        titleFont: { size: 13, weight: '700' },
+                        bodyFont: { size: 13 },
+                        footerFont: { size: 13, weight: '700' },
+                        padding: 10,
+                        cornerRadius: 4,
+                        itemSort: (a, b) => b.raw - a.raw,
+                        filter: item => item.raw > 0 && !item.dataset.halo,
+                        callbacks: {
+                            label: ctx => ' ' + ctx.dataset.label + ': '
+                                + Math.round(ctx.raw).toLocaleString(),
+                            // The measured total, not the sum of the stack: before
+                            // 2025-12-15 there is no breakdown to add up, and after
+                            // it the queries still leave ~0.4% unaccounted for.
+                            footer: items => {
+                                const i = items[0].dataIndex;
+                                const total = dataset.totals.get(items[0].chart.data.labels[i]);
+                                return total ? 'Total: ' + total.toLocaleString() : '';
                             },
-                            ticks: {
-                                callback: compact,
-                                color: '#52514e',
-                                font: { size: 11 },
-                            },
-                            grid: { color: 'rgba(0,0,0,0.04)' },
                         },
                     },
-                    plugins: {
-                        tooltip: {
-                            backgroundColor: 'rgba(0,0,0,0.85)',
-                            titleFont: { size: 12 },
-                            bodyFont: { size: 12 },
-                            padding: 10,
-                            cornerRadius: 6,
-                            itemSort: (a, b) => b.raw - a.raw,
-                            filter: item => item.raw > 0 && !item.dataset.halo,
-                            callbacks: {
-                                label: ctx => ' ' + ctx.dataset.label + ': '
-                                    + Math.round(ctx.raw).toLocaleString(),
-                                // The measured total, not the sum of the stack: before
-                                // 2025-12-15 there is no breakdown to add up, and after
-                                // it the queries still leave ~0.4% unaccounted for.
-                                footer: items => {
-                                    const i = items[0].dataIndex;
-                                    const total = data.totals.get(items[0].chart.data.labels[i]);
-                                    return total ? 'Total: ' + total.toLocaleString() : '';
-                                },
-                            },
+                    legend: {
+                        position: 'top',
+                        align: 'end',
+                        // The halo has no legend entry of its own, so hiding the
+                        // average has to take it along or a surface line survives.
+                        onClick: (e, item, legend) => {
+                            const ch = legend.chart;
+                            const flip = i => ch.setDatasetVisibility(i, !ch.isDatasetVisible(i));
+                            flip(item.datasetIndex);
+                            if (ch.data.datasets[item.datasetIndex].stack === 'average') {
+                                const halo = ch.data.datasets.findIndex(ds => ds.halo);
+                                if (halo >= 0) flip(halo);
+                            }
+                            ch.update();
                         },
-                        legend: {
-                            position: 'top',
-                            align: 'end',
-                            // The halo has no legend entry of its own, so hiding the
-                            // average has to take it along or a white line survives.
-                            onClick: (e, item, legend) => {
-                                const ch = legend.chart;
-                                const flip = i => ch.setDatasetVisibility(i, !ch.isDatasetVisible(i));
-                                flip(item.datasetIndex);
-                                if (ch.data.datasets[item.datasetIndex].stack === 'average') {
-                                    const halo = ch.data.datasets.findIndex(ds => ds.halo);
-                                    if (halo >= 0) flip(halo);
-                                }
-                                ch.update();
-                            },
-                            labels: {
-                                filter: (item, data) => !data.datasets[item.datasetIndex].halo,
-                                // Drawing order puts the average first; the legend
-                                // reads better with the models in stack order and
-                                // the reference line last.
-                                sort: (a, b) => (a.text === MA_LABEL) - (b.text === MA_LABEL),
-                                usePointStyle: true,
-                                pointStyle: 'rect',
-                                boxWidth: 8,
-                                boxHeight: 8,
-                                padding: 12,
-                                color: '#52514e',
-                                font: { size: 12 },
-                            },
+                        labels: {
+                            filter: (item, data) => !data.datasets[item.datasetIndex].halo,
+                            // Drawing order puts the average first; the legend
+                            // reads better with the models in stack order and
+                            // the reference line last.
+                            sort: (a, b) => (a.text === MA_LABEL) - (b.text === MA_LABEL),
+                            usePointStyle: true,
+                            pointStyle: 'rect',
+                            boxWidth: 8,
+                            boxHeight: 8,
+                            padding: 12,
+                            color: muted,
+                            font: text,
                         },
                     },
                 },
+            };
+        }
+
+        function renderChart(data, dates) {
+            document.getElementById('loading').hidden = true;
+            document.getElementById('tela').hidden = false;
+            chart = new Chart(document.getElementById('chart'), {
+                type: 'line',
+                data: { labels: dates, datasets: buildDatasets(data, dates) },
+                options: chartOptions(dates),
             });
         }
 
@@ -616,7 +468,7 @@
             document.getElementById('table-head').innerHTML =
                 '<th scope="col">Date</th>' +
                 shown.map(([name, color]) =>
-                    `<th scope="col"><span class="swatch" style="background:${color}"></span>${name}</th>`
+                    `<th scope="col"><span class="swatch" style="background:var(${color})"></span>${name}</th>`
                 ).join('') +
                 '<th scope="col">Total</th>';
 
@@ -659,7 +511,7 @@
                 + (otherTotal / grand * 100).toFixed(1) + '% of all commits since '
                 + dates[0] + '. <em>Unnamed</em> is the trailer form used before it '
                 + 'started naming the model.</p>'
-                + '<table><thead><tr><th scope="col">Model</th><th scope="col">Commits</th>'
+                + '<table class="tabella"><thead><tr><th scope="col">Model</th><th scope="col">Commits</th>'
                 + '<th scope="col">Share of Other</th><th scope="col">Last 7d, per day</th>'
                 + '</tr></thead><tbody>'
                 + rows.map(([m, n]) =>
@@ -687,16 +539,22 @@
         });
 
         // The range scopes the chart and the Other panel, which states its own
-        // window in prose. The stat cards and the table name theirs in the label
-        // ("7d avg", "Last 14 days") and stay anchored to the latest day.
+        // window in prose. The summary boxes and the table name theirs in the label
+        // ("Last 7 days", "Last 14 days") and stay anchored to the latest day.
         function applyRange(range) {
             viewRange = range;
             const dates = inWindow(dataset);
+            redraw();
+            renderOther(dataset, dates);
+        }
+
+        function redraw() {
+            if (!chart) return;
+            const dates = inWindow(dataset);
             chart.data.labels = dates;
             chart.data.datasets = buildDatasets(dataset, dates);
-            chart.options.scales.x.time.unit = timeUnit(dates.length);
+            chart.options = chartOptions(dates);
             chart.update();
-            renderOther(dataset, dates);
         }
 
         document.querySelectorAll('.range-btn').forEach(btn => {
@@ -714,8 +572,10 @@
         });
 
         document.addEventListener('DOMContentLoaded', () => {
-            loadData()
-                .then(data => {
+            // Chart.js measures its labels once: draw after the site fonts are in,
+            // or margins stay sized for the fallback font.
+            Promise.all([loadData(), document.fonts.ready])
+                .then(([data]) => {
                     dataset = data;
                     const dates = inWindow(data);
                     renderStats(data); renderChart(data, dates);
@@ -726,6 +586,26 @@
                     document.getElementById('loading').textContent = 'Error loading data.';
                 });
         });
+
+        // Theme: follows the system until chosen, then the choice is kept
+        // (read in the head). 'cambiotema' is the common style's event name.
+        const systemDark = matchMedia('(prefers-color-scheme: dark)');
+        const isDark = () => (theme || (systemDark.matches ? 'scuro' : 'chiaro')) === 'scuro';
+        function applyTheme() {
+            if (theme) document.documentElement.dataset.tema = theme;
+            const btn = document.getElementById('tema');
+            btn.querySelector('.et').textContent = isDark() ? 'Light' : 'Dark';
+            btn.setAttribute('aria-label', 'Switch to ' + (isDark() ? 'light' : 'dark') + ' theme');
+            document.dispatchEvent(new Event('cambiotema'));
+        }
+        document.getElementById('tema').addEventListener('click', () => {
+            theme = isDark() ? 'chiaro' : 'scuro';
+            try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* storage blocked */ }
+            applyTheme();
+        });
+        systemDark.addEventListener('change', applyTheme);
+        document.addEventListener('cambiotema', redraw);
+        applyTheme();
     </script>
 </body>
 </html>

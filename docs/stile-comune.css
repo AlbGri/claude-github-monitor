@@ -1,0 +1,261 @@
+/* Stile comune AlbGri - versione 2026-11-24.2
+   Regole e motivi: progetto albgri-stile (_local/STILE_COMUNE.md, sezione 10, con il registro delle versioni)
+   Questo file si copia nei progetti senza modificarlo: le modifiche si fanno nell'originale, che aumenta la versione.
+   Una copia si aggiorna solo quando al progetto serve; una versione vecchia non e' un errore.
+   Caratteri: cartella caratteri/ accanto a questo file, da copiare insieme; caratteri.css va collegato prima. */
+
+/* ---- Variabili ---- */
+:root {
+  color-scheme: light;
+  --serif: Alegreya, Palatino, Georgia, serif;
+  --sans: "Atkinson Hyperlegible Next", "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --bg: #e7e9ef; --surface: #f4f6fa; --surface-2: #edeff6; --ink: #26242b; --muted: #625f69; --line: #caccd7;
+  --accent: #f6eb61; --on-accent: #26242b; --pericolo: #a12623;
+  /* Sul chiaro il giallo non si legge come testo: il segno e' l'inchiostro e l'accento un tratto di evidenziatore */
+  --segno: var(--ink); --sottolinea: none; --evidenzia: linear-gradient(transparent 58%, var(--accent) 58%);
+  /* Serie dei grafici, in ordine fisso: blu petrolio, ruggine, viola, verde bosco, prugna, turchese, ocra, mattone */
+  --s1: #1d85b0; --s2: #c06325; --s3: #5e3d9e; --s4: #317a45; --s5: #912e6e; --s6: #009f98; --s7: #9d6d1c; --s8: #843b3e;
+  /* "Altro" e le serie di confronto: grigio tinto, stesso contrasto sulla superficie nei due temi */
+  --altro: #8a8796;
+  --dato: var(--s1);
+  /* Scale delle mappe: --seq1 e' il valore basso; --div1 il piu' sotto lo zero (blu), --div4 lo zero, --div7 il piu' sopra (ruggine) */
+  --seq1: #d2edfc; --seq2: #8fcae9; --seq3: #45a4d0; --seq4: #097ca6; --seq5: #015473;
+  --div1: #026083; --div2: #3294c0; --div3: #90c6e3; --div4: #e4e6ec; --div5: #e4b196; --div6: #be7449; --div7: #814622;
+  --nessun-dato: repeating-linear-gradient(45deg, var(--line) 0 2px, var(--surface) 2px 6px);
+}
+/* Scuro per scelta salvata (data-tema) oppure, senza scelta, secondo il sistema: i due blocchi restano uguali */
+:root[data-tema="scuro"] {
+  color-scheme: dark;
+  --bg: #19171c; --surface: #232025; --surface-2: #2b282e; --ink: #e7e7ee; --muted: #a6a5af; --line: #3f3b44;
+  --on-accent: #19171c; --segno: var(--accent); --sottolinea: underline; --evidenzia: none; --pericolo: #f2897e;
+  --s1: #2f98c6; --s2: #d07843; --s3: #805fca; --s4: #56a76a; --s5: #b54481; --s6: #00aaa3; --s7: #b28c32; --s8: #b04d59; --altro: #726f7b;
+  --seq1: #1e3c4b; --seq2: #215c78; --seq3: #2a81a8; --seq4: #4caad7; --seq5: #98d4f3;
+  --div1: #8eceef; --div2: #3d9eca; --div3: #1e6c8d; --div4: #383a41; --div5: #8c5331; --div6: #c87d52; --div7: #efb696;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="chiaro"]) {
+    color-scheme: dark;
+    --bg: #19171c; --surface: #232025; --surface-2: #2b282e; --ink: #e7e7ee; --muted: #a6a5af; --line: #3f3b44;
+    --on-accent: #19171c; --segno: var(--accent); --sottolinea: underline; --evidenzia: none; --pericolo: #f2897e;
+    --s1: #2f98c6; --s2: #d07843; --s3: #805fca; --s4: #56a76a; --s5: #b54481; --s6: #00aaa3; --s7: #b28c32; --s8: #b04d59; --altro: #726f7b;
+    --seq1: #1e3c4b; --seq2: #215c78; --seq3: #2a81a8; --seq4: #4caad7; --seq5: #98d4f3;
+    --div1: #8eceef; --div2: #3d9eca; --div3: #1e6c8d; --div4: #383a41; --div5: #8c5331; --div6: #c87d52; --div7: #efb696;
+  }
+}
+
+/* ---- Base ---- */
+* { box-sizing: border-box; }
+/* il salto a un'ancora non deve finire sotto la barra fissa: altezza della barra piu' un margine */
+html { scroll-padding-top: 60px; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.45 var(--sans); }
+:focus-visible { outline: 3px solid var(--segno); outline-offset: 2px; }
+p { margin: 0 0 8px; }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--ink); }
+.tenue { color: var(--muted); }
+a.rimando { color: var(--segno); font-weight: 700; text-decoration: var(--sottolinea); text-underline-offset: 2px; background-image: var(--evidenzia); }
+pre { margin: 0 0 10px; padding: 8px 10px; overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+  font: 14px/1.4 var(--mono); }
+code { font-family: var(--mono); font-size: .9em; }
+pre code { font-size: inherit; }
+/* codice in linea: --surface sul fondo (con --surface-2 non si vede), il fondo dentro una superficie */
+:not(pre) > code { padding: .1em .3em; background: var(--surface); border-radius: 4px; overflow-wrap: anywhere; }
+.scheda :not(pre) > code, .finestra :not(pre) > code { background: var(--bg); }
+
+/* ---- Guscio: barra, mappa, pagina ---- */
+.barra { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px; padding: 8px 16px;
+  background: var(--surface); border-bottom: 1px solid var(--line); }
+.marchio { font: 700 1.3rem/1.1 var(--serif); color: inherit; text-decoration: none; }
+.briciole, .aggiornato { font-size: .9rem; color: var(--muted); }
+.briciole a { color: inherit; }
+.aggiornato { margin-left: auto; }
+/* ripetizione nel piede di cio' che sul telefono sparisce dalla barra (la data) */
+.solo-telefono { display: none; }
+
+.pagina { display: grid; grid-template-columns: 216px minmax(0, 1fr); gap: 0 18px; align-items: start; padding: 14px 16px 20px; }
+
+/* Mappa "voi siete qui": una linea con le fermate, il ramo corrente aperto */
+#mappa { position: sticky; top: 58px; max-height: calc(100vh - 70px); overflow: auto; padding-left: 1px; font-size: .92rem; }
+/* padding-left: overflow taglia il pallino "sei qui" (left: -1px); sul telefono lo sostituisce il padding sotto */
+#mappa h2 { font: 500 1.05rem var(--serif); color: var(--muted); margin: 0 0 6px; }
+#mappa ul { list-style: none; margin: 0; padding: 0; }
+#mappa li { position: relative; padding-left: 20px; }
+#mappa li::before { content: ""; position: absolute; left: 5px; top: 0; bottom: 0; width: 2px; background: var(--line); }
+#mappa > ul > li:first-child::before { top: 14px; }
+#mappa li:last-child::before { bottom: auto; height: 14px; }
+#mappa a, #mappa summary { display: block; padding: 4px 6px; border-radius: 4px; color: inherit; text-decoration: none; cursor: pointer; list-style: none; }
+#mappa summary::-webkit-details-marker { display: none; }
+#mappa a:hover, #mappa summary:hover { background: var(--surface-2); }
+#mappa a::before, #mappa summary::before { content: ""; position: absolute; left: 0; top: 8px; width: 12px; height: 12px; border-radius: 50%;
+  background: var(--bg); border: 2px solid var(--muted); }
+#mappa li li a::before { left: 2px; top: 10px; width: 8px; height: 8px; }
+#mappa summary::after { content: "+"; float: right; color: var(--muted); }
+#mappa details[open] > summary::after { content: "\2212"; }
+#mappa a[aria-current] { font-weight: 700; }
+/* "sei qui" sempre col pallino grande, a ogni livello: in quello piccolo il giallo non si vedeva */
+#mappa a[aria-current]::before { left: -1px; top: 7px; width: 14px; height: 14px; background: var(--accent); border: 1.5px solid var(--segno); }
+#mappa a[aria-current]::after { content: "sei qui"; margin-left: 8px; font-weight: 400; font-size: .82rem; color: var(--muted); }
+.btn.fab { display: none; }
+
+/* ---- Contenuto: titoli, pulsanti, sezioni ripiegate ---- */
+main { min-width: 0; }
+h1 { font: 700 1.9rem/1.1 var(--serif); letter-spacing: -.01em; margin: 0 0 6px; }
+/* titoli di sezione ovunque; fila, scheda, mappa e finestra hanno i loro */
+h2 { font: 700 1.35rem/1.2 var(--serif); margin: 22px 0 6px; }
+h3 { font: 700 1.1rem/1.25 var(--serif); margin: 16px 0 4px; }
+/* il titolo raggiunto da un link e' "dove sei": lo stesso tratto del titolo di un riquadro */
+:is(h2, h3):target { text-decoration: underline 3px var(--accent); text-underline-offset: 3px; }
+.testata { display: flex; flex-wrap: wrap; gap: 6px 20px; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.testata h1 { margin: 0; }
+
+.btn { display: inline-block; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 6px; padding: 6px 12px;
+  font: .92rem/1.2 var(--sans); text-decoration: none; cursor: pointer; }
+.btn:hover:not(:disabled) { border-color: var(--muted); }
+.btn[aria-pressed="true"] { position: relative; background: var(--surface-2); border-color: var(--ink); }
+/* disattivato: si vede che c'e' ma non risponde, anche il giallo */
+.btn:disabled { opacity: .35; cursor: default; }
+.btn.primario { background: var(--accent); border-color: var(--segno); color: var(--on-accent); font-weight: 700; }
+.segmenti { display: inline-flex; }
+.segmenti .btn { border-radius: 0; margin-left: -1px; }
+.segmenti .btn:first-child { border-radius: 6px 0 0 6px; margin-left: 0; }
+.segmenti .btn:last-child { border-radius: 0 6px 6px 0; }
+
+details.piega { border-top: 1px solid var(--line); }
+details.piega summary { padding: 6px 0; font-weight: 700; cursor: pointer; }
+details.piega > :not(summary) { margin: 0 0 10px; }
+
+/* ---- Riquadri ---- */
+/* File di riquadri: griglia fitta sul computer, fila da scorrere col dito sul telefono */
+.fila { margin: 12px 0 0; }
+.fila > h2 { font: 500 1.05rem var(--serif); color: var(--muted); margin: 0 0 6px; }
+.fila > h2 small { font: .85rem var(--sans); margin-left: 6px; }
+/* auto-fit: le colonne arrivano al bordo destro; l'ultima riga puo' restare corta */
+.riquadri { display: grid; grid-template-columns: repeat(auto-fit, minmax(134px, 1fr)); gap: 8px; }
+/* riquadri di solo testo: piu' larghi, per stare su due o tre righe */
+.riquadri.larghi { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+.riquadro { display: flex; flex-direction: column; gap: 2px; padding: 9px 10px 10px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 6px; color: inherit; text-decoration: none; }
+.riquadro:hover { border-color: var(--ink); }
+.riquadro:hover .r-titolo, .riquadro:focus-visible .r-titolo { text-decoration: underline 3px var(--accent); text-underline-offset: 3px; }
+.r-titolo { font: 700 1.08rem/1.2 var(--serif); }
+.r-riga { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0 8px; }
+.r-num { font-size: 1.3rem; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.r-num small { font-size: .88rem; font-weight: 400; color: var(--muted); }
+.r-nota { font-size: .88rem; color: var(--muted); }
+/* la riga descrittiva sta in due righe: il resto si legge nella pagina */
+.riquadro > .r-nota { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.scintilla { width: 100%; height: 24px; margin-top: auto; overflow: visible; }
+.scintilla path { fill: none; stroke: var(--dato); stroke-width: 1.5; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.scintilla .fine { stroke-width: 5; stroke-linecap: round; }
+
+/* ---- Pagina di contenuto: grafico, numeri, tabella ---- */
+.storia { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 12px 22px; align-items: start; }
+.scheda { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
+.scheda h2 { font: 700 1rem var(--sans); margin: 0 0 4px; }
+.grafico { position: relative; margin-top: 6px; }
+/* solo l'SVG figlio diretto: quello di una libreria (Plotly) sta piu' in basso e ha i suoi stili */
+.grafico > svg { display: block; width: 100%; touch-action: pan-y; }
+.grafico > svg text { font: 12.5px var(--sans); fill: var(--muted); }
+.grafico > svg text.valore { fill: var(--ink); font-weight: 700; }
+.g-banda { fill: var(--surface-2); }
+.g-griglia { stroke: var(--line); }
+.g-mirino { stroke: var(--muted); }
+.g-linea { fill: none; stroke: var(--dato); stroke-width: 2; stroke-linejoin: round; }
+.g-punto { fill: var(--dato); stroke: var(--surface); stroke-width: 2; }
+.punta { position: absolute; padding: 3px 8px; background: var(--surface); border: 1px solid var(--ink); border-radius: 4px; font-size: .88rem;
+  white-space: nowrap; pointer-events: none; }
+.numeri { margin: 0 0 10px; }
+.numeri div { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; border-bottom: 1px solid var(--line); }
+.numeri dt { color: var(--muted); }
+.numeri dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tabella { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.tabella th, .tabella td { padding: 3px 0; border-bottom: 1px solid var(--line); text-align: right; }
+.tabella th:first-child, .tabella td:first-child { text-align: left; }
+/* senza spazio due colonne di numeri allineati a destra si toccano */
+.tabella :is(th, td) + :is(th, td) { padding-left: 14px; }
+.tabella thead th { font-size: .88rem; color: var(--muted); vertical-align: bottom; border-bottom-color: var(--muted); }
+/* il giallo su centinaia di righe sarebbe rumore: link del colore del testo, sottolineato */
+.tabella a { color: inherit; text-underline-offset: 2px; }
+
+/* ---- Testi lunghi: documenti e guide dentro .documento ---- */
+.documento ul, .documento ol { margin: 0 0 8px; padding-left: 22px; }
+.documento li { margin-bottom: 2px; }
+.documento li > p { margin-bottom: 4px; }
+/* tabelle di testo: solo filetti orizzontali, a sinistra; larghe, scorrono di lato. Quelle di numeri restano .tabella */
+.documento table:not(.tabella) { display: block; max-width: 100%; overflow-x: auto; margin: 0 0 10px; border-collapse: collapse; }
+.documento table:not(.tabella) :is(th, td) { padding: 4px 14px 4px 0; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.documento table:not(.tabella) th { border-bottom-color: var(--muted); }
+
+/* ---- Piede ---- */
+.piede { margin-top: 16px; padding-top: 8px; border-top: 1px solid var(--line); font-size: .88rem; color: var(--muted); }
+.piede a { color: inherit; }
+
+/* ---- Controlli comuni: lingua, tema ---- */
+.controlli { display: flex; gap: 6px; align-items: center; margin-left: auto; }
+.aggiornato + .controlli { margin-left: 0; }
+.controlli .btn { padding: 4px 9px; font-size: .88rem; white-space: nowrap; }
+.lingua svg { width: 18px; height: 12px; margin-right: 5px; vertical-align: -1px; outline: 1px solid var(--line); }
+.tema i { display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px; border: 1.5px solid var(--ink); border-radius: 50%;
+  background: linear-gradient(90deg, var(--ink) 50%, transparent 50%); }
+
+/* ---- Componenti d'applicazione: campi, finestre, avvisi, pericolo, messaggi, icone ---- */
+/* 16 px nei campi: sotto quella misura iPhone ingrandisce la pagina al tocco */
+.campo { width: 100%; padding: 7px 9px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; font: 16px/1.3 var(--sans); }
+.campo:hover { border-color: var(--muted); }
+.campo:focus-visible { border-color: var(--ink); }
+.campo::placeholder { color: var(--muted); }
+textarea.campo.codice { font: 14px/1.4 var(--mono); }
+/* dentro una superficie il campo prende il colore della pagina, per staccarsi */
+.finestra .campo, .scheda .campo, .giorno .campo { background: var(--bg); }
+.etichetta { display: block; margin: 0 0 3px; font-size: .9rem; font-weight: 700; }
+dialog.finestra { width: min(92vw, 36rem); padding: 14px 16px; background: var(--surface); color: var(--ink); border: 1px solid var(--ink); border-radius: 6px; }
+dialog.finestra::backdrop { background: rgb(25 23 28 / .5); }
+dialog.finestra h2 { font: 700 1.25rem/1.2 var(--serif); margin: 0 0 8px; }
+/* azioni a destra, la principale per ultima */
+.azioni { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+/* avvisi senza striscia colorata: un riquadro, e per l'errore la parola in testa */
+.avviso { padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; font-size: .92rem; }
+.avviso.errore { border-color: var(--pericolo); }
+.avviso.errore b { color: var(--pericolo); }
+.btn.pericolo { color: var(--pericolo); }
+.btn.pericolo:hover:not(:disabled) { border-color: var(--pericolo); }
+.btn.pericolo.pieno { background: var(--pericolo); border-color: var(--pericolo); color: var(--surface); font-weight: 700; }
+/* messaggio a colori invertiti: deve leggersi anche sopra una mappa */
+.toast { position: fixed; left: 50%; bottom: 16px; z-index: 30; transform: translateX(-50%); display: flex; gap: 12px; align-items: center;
+  max-width: min(92vw, 30rem); padding: 8px 8px 8px 14px; background: var(--ink); color: var(--bg); border-radius: 6px; font-size: .95rem; }
+.toast[hidden] { display: none; }
+.toast .btn { padding: 4px 10px; }
+.btn.icona { display: inline-grid; place-items: center; flex: none; width: 32px; height: 32px; padding: 0; }
+.btn.icona svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+@media (pointer: coarse) { .btn.icona { width: 44px; height: 44px; } }
+
+/* ---- Telefono ---- */
+@media (max-width: 760px) {
+  /* marchio e controlli sulla prima riga, briciole sulla seconda: la barra ha un'altezza prevedibile */
+  .briciole { order: 1; flex-basis: 100%; }
+  .briciole:empty { display: none; }
+  html { scroll-padding-top: 90px; }
+  .pagina { grid-template-columns: minmax(0, 1fr); padding: 10px 12px 60px; }
+  .aggiornato { display: none; }
+  .solo-telefono { display: inline; }
+  .aggiornato + .controlli { margin-left: auto; }
+  h1 { font-size: 1.55rem; }
+  #mappa { position: fixed; inset: auto 0 0 0; top: auto; z-index: 20; max-height: 72vh; padding: 12px 16px 70px; background: var(--surface);
+    border-top: 2px solid var(--ink); border-radius: 12px 12px 0 0; visibility: hidden; }
+  .mappa-aperta #mappa { visibility: visible; }
+  /* "Mappa" non e' giallo (il giallo pieno e' "cosa fare"): porta il pallino "sei qui" della mappa */
+  .btn.fab { display: block; position: fixed; right: 14px; bottom: 14px; z-index: 21; padding: 8px 13px; border-radius: 999px; border-color: var(--ink);
+    font-size: .9rem; font-weight: 700; }
+  .btn.fab::before { content: ""; display: inline-block; width: 11px; height: 11px; margin-right: 6px; vertical-align: -1px; border-radius: 50%;
+    background: var(--accent); border: 1.5px solid var(--segno); }
+  .mappa-aperta .btn.fab::before { display: none; }
+  .riquadri { display: flex; overflow-x: auto; scroll-snap-type: x proximity; margin: 0 -12px; padding: 0 12px 6px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+  .riquadro { flex: 0 0 46%; scroll-snap-align: start; scroll-margin-left: 12px; }
+  .storia { grid-template-columns: minmax(0, 1fr); }
+  .tabella :is(th, td) + :is(th, td) { padding-left: 8px; }
+  .riquadri.larghi .riquadro { flex-basis: 72%; }
+  .toast { bottom: 58px; }
+  /* sul telefono i controlli restano nella barra, senza le scritte */
+  .controlli .et { display: none; }
+  .lingua svg, .tema i { margin-right: 0; }
+}
