@@ -42,12 +42,6 @@
     <script src="vendor/chart.umd.min.js" defer></script>
     <script src="vendor/chartjs-adapter-date-fns.bundle.min.js" defer></script>
     <style>
-        /* The site name is the page title: one page, no title to repeat below the bar */
-        h1.marchio { margin: 0; }
-        /* One page, nothing to map: no site-map column */
-        .pagina { grid-template-columns: minmax(0, 1fr); }
-        /* The summary boxes are not links: no hover cue */
-        .riquadro:hover { border-color: var(--line); }
         .skip-link { position: absolute; top: -100%; left: 8px; z-index: 10; padding: 6px 12px; background: var(--surface);
             color: var(--ink); border: 1px solid var(--ink); border-radius: 0 0 6px 6px; }
         .skip-link:focus { top: 0; }
@@ -61,10 +55,6 @@
         .loading { padding: 4rem 0; text-align: center; color: var(--muted); }
         .table-wrap { overflow-x: auto; margin-top: 12px; }
         .tabella { white-space: nowrap; }
-        /* thirteen columns: a step smaller, so it fits a laptop without scrolling */
-        #data-table { font-size: .9rem; }
-        /* four columns: at full width they would drift apart */
-        #other-body .tabella { width: auto; }
         .tabella caption { text-align: left; padding-bottom: 4px; font-size: .88rem; color: var(--muted); }
         .swatch { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
         .swatch.altro { background: var(--altro); }
@@ -85,7 +75,7 @@
         <span class="controlli"><button type="button" class="btn tema" id="tema" aria-label="Switch to dark theme"><i></i><span class="et">Dark</span></button></span>
     </header>
 
-    <div class="pagina">
+    <div class="pagina unica">
     <main>
         <p class="tenue">Public GitHub commits carrying the Claude Code <code>Co-Authored-By</code> trailer, broken down by model.</p>
 
@@ -130,7 +120,7 @@
                 <canvas id="chart" role="img" aria-label="Stacked area chart of daily Claude Code commits on public GitHub, split by Claude model"></canvas>
             </div>
             <div class="table-wrap" id="table-wrap" hidden>
-                <table class="tabella" id="data-table">
+                <table class="tabella fitta" id="data-table">
                     <caption>Last 14 days, commits per model</caption>
                     <thead><tr id="table-head"></tr></thead>
                     <tbody id="table-body"></tbody>
@@ -511,7 +501,7 @@
                 + (otherTotal / grand * 100).toFixed(1) + '% of all commits since '
                 + dates[0] + '. <em>Unnamed</em> is the trailer form used before it '
                 + 'started naming the model.</p>'
-                + '<table class="tabella"><thead><tr><th scope="col">Model</th><th scope="col">Commits</th>'
+                + '<table class="tabella stretta"><thead><tr><th scope="col">Model</th><th scope="col">Commits</th>'
                 + '<th scope="col">Share of Other</th><th scope="col">Last 7d, per day</th>'
                 + '</tr></thead><tbody>'
                 + rows.map(([m, n]) =>

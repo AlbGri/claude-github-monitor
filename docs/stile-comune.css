@@ -1,4 +1,4 @@
-/* Stile comune AlbGri - versione 2026-11-24.2
+/* Stile comune AlbGri - versione 2026-11-25.1
    Regole e motivi: progetto albgri-stile (_local/STILE_COMUNE.md, sezione 10, con il registro delle versioni)
    Questo file si copia nei progetti senza modificarlo: le modifiche si fanno nell'originale, che aumenta la versione.
    Una copia si aggiorna solo quando al progetto serve; una versione vecchia non e' un errore.
@@ -65,7 +65,8 @@ pre code { font-size: inherit; }
 /* ---- Guscio: barra, mappa, pagina ---- */
 .barra { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px; padding: 8px 16px;
   background: var(--surface); border-bottom: 1px solid var(--line); }
-.marchio { font: 700 1.3rem/1.1 var(--serif); color: inherit; text-decoration: none; }
+/* margin: nei siti di una pagina sola il marchio e' l'h1, che altrimenti avrebbe il margine dei titoli */
+.marchio { margin: 0; font: 700 1.3rem/1.1 var(--serif); color: inherit; text-decoration: none; }
 .briciole, .aggiornato { font-size: .9rem; color: var(--muted); }
 .briciole a { color: inherit; }
 .aggiornato { margin-left: auto; }
@@ -73,6 +74,8 @@ pre code { font-size: inherit; }
 .solo-telefono { display: none; }
 
 .pagina { display: grid; grid-template-columns: 216px minmax(0, 1fr); gap: 0 18px; align-items: start; padding: 14px 16px 20px; }
+/* sito di una pagina sola: niente mappa, una colonna */
+.pagina.unica { grid-template-columns: minmax(0, 1fr); }
 
 /* Mappa "voi siete qui": una linea con le fermate, il ramo corrente aperto */
 #mappa { position: sticky; top: 58px; max-height: calc(100vh - 70px); overflow: auto; padding-left: 1px; font-size: .92rem; }
@@ -135,8 +138,9 @@ details.piega > :not(summary) { margin: 0 0 10px; }
 .riquadri.larghi { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
 .riquadro { display: flex; flex-direction: column; gap: 2px; padding: 9px 10px 10px;
   background: var(--surface); border: 1px solid var(--line); border-radius: 6px; color: inherit; text-decoration: none; }
-.riquadro:hover { border-color: var(--ink); }
-.riquadro:hover .r-titolo, .riquadro:focus-visible .r-titolo { text-decoration: underline 3px var(--accent); text-underline-offset: 3px; }
+/* solo il riquadro link risponde al passaggio: uno che informa e basta non deve sembrare cliccabile */
+a.riquadro:hover { border-color: var(--ink); }
+a.riquadro:hover .r-titolo, a.riquadro:focus-visible .r-titolo { text-decoration: underline 3px var(--accent); text-underline-offset: 3px; }
 .r-titolo { font: 700 1.08rem/1.2 var(--serif); }
 .r-riga { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0 8px; }
 .r-num { font-size: 1.3rem; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
@@ -176,6 +180,9 @@ details.piega > :not(summary) { margin: 0 0 10px; }
 .tabella thead th { font-size: .88rem; color: var(--muted); vertical-align: bottom; border-bottom-color: var(--muted); }
 /* il giallo su centinaia di righe sarebbe rumore: link del colore del testo, sottolineato */
 .tabella a { color: inherit; text-underline-offset: 2px; }
+/* poche colonne: a tutta larghezza si allontanano. Molte colonne: un passo piu' piccolo */
+.tabella.stretta { width: auto; }
+.tabella.fitta { font-size: .9rem; }
 
 /* ---- Testi lunghi: documenti e guide dentro .documento ---- */
 .documento ul, .documento ol { margin: 0 0 8px; padding-left: 22px; }
@@ -236,6 +243,8 @@ dialog.finestra h2 { font: 700 1.25rem/1.2 var(--serif); margin: 0 0 8px; }
   .briciole:empty { display: none; }
   html { scroll-padding-top: 90px; }
   .pagina { grid-template-columns: minmax(0, 1fr); padding: 10px 12px 60px; }
+  /* i 60 px in fondo sono per il pulsante "Mappa", che in una pagina sola non c'e' */
+  .pagina.unica { padding-bottom: 20px; }
   .aggiornato { display: none; }
   .solo-telefono { display: inline; }
   .aggiornato + .controlli { margin-left: auto; }
